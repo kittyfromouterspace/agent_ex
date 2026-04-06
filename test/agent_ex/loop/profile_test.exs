@@ -11,9 +11,28 @@ defmodule AgentEx.Loop.ProfileTest do
       assert AgentEx.Loop.Stages.ContextGuard in stages
       assert AgentEx.Loop.Stages.ProgressInjector in stages
       assert AgentEx.Loop.Stages.LLMCall in stages
-      assert AgentEx.Loop.Stages.StopReasonRouter in stages
+      assert AgentEx.Loop.Stages.ModeRouter in stages
       assert AgentEx.Loop.Stages.ToolExecutor in stages
       assert AgentEx.Loop.Stages.CommitmentGate in stages
+    end
+
+    test "agentic_planned profile has 9 stages" do
+      stages = Profile.stages(:agentic_planned)
+      assert length(stages) == 9
+
+      assert AgentEx.Loop.Stages.WorkspaceSnapshot in stages
+      assert AgentEx.Loop.Stages.PlanBuilder in stages
+      assert AgentEx.Loop.Stages.PlanTracker in stages
+      assert AgentEx.Loop.Stages.ModeRouter in stages
+    end
+
+    test "turn_by_turn profile has 7 stages" do
+      stages = Profile.stages(:turn_by_turn)
+      assert length(stages) == 7
+
+      assert AgentEx.Loop.Stages.WorkspaceSnapshot in stages
+      assert AgentEx.Loop.Stages.HumanCheckpoint in stages
+      assert AgentEx.Loop.Stages.ModeRouter in stages
     end
 
     test "conversational profile has 3 stages" do
@@ -22,7 +41,7 @@ defmodule AgentEx.Loop.ProfileTest do
 
       assert AgentEx.Loop.Stages.ContextGuard in stages
       assert AgentEx.Loop.Stages.LLMCall in stages
-      assert AgentEx.Loop.Stages.StopReasonRouter in stages
+      assert AgentEx.Loop.Stages.ModeRouter in stages
     end
 
     test "unknown profile falls back to agentic" do
@@ -39,6 +58,20 @@ defmodule AgentEx.Loop.ProfileTest do
       assert config.verify_on_complete == false
       assert config.progress_injection == :system_reminder
       assert config.telemetry_prefix == [:agent_ex]
+    end
+
+    test "agentic_planned config returns valid defaults" do
+      config = Profile.config(:agentic_planned)
+      assert config.max_turns == 100
+      assert config.require_plan_verification == true
+      assert config.max_plan_steps == 20
+    end
+
+    test "turn_by_turn config returns valid defaults" do
+      config = Profile.config(:turn_by_turn)
+      assert config.max_turns == 200
+      assert config.progress_injection == :none
+      assert config.max_chunks_per_session == 50
     end
 
     test "conversational config returns valid defaults" do

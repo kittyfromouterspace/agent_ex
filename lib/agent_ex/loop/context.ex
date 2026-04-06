@@ -26,11 +26,27 @@ defmodule AgentEx.Loop.Context do
     tools: [],
     core_tools: [],
 
-    # Progress tracking
+    # Mode and phase
+    mode: :agentic,
     phase: :execute,
+
+    # Progress tracking
     turns_used: 0,
     context_pct: 0.0,
     accumulated_text: "",
+
+    # Plan tracking (agentic_planned mode)
+    plan: nil,
+    plan_step_index: 0,
+    plan_steps_completed: [],
+
+    # Human-in-the-loop (turn_by_turn mode)
+    human_input: nil,
+    pending_human_response: false,
+
+    # Workspace context
+    workspace_snapshot: nil,
+    file_reads: %{},
 
     # Cost tracking
     total_cost: 0.0,
@@ -72,10 +88,18 @@ defmodule AgentEx.Loop.Context do
           messages: list(map()),
           tools: list(map()),
           core_tools: list(map()),
+          mode: :agentic | :agentic_planned | :turn_by_turn | :conversational,
           phase: atom(),
           turns_used: non_neg_integer(),
           context_pct: float(),
           accumulated_text: String.t(),
+          plan: map() | nil,
+          plan_step_index: non_neg_integer(),
+          plan_steps_completed: list(non_neg_integer()),
+          human_input: String.t() | nil,
+          pending_human_response: boolean(),
+          workspace_snapshot: String.t() | nil,
+          file_reads: %{String.t() => %{hash: String.t(), last_read_turn: non_neg_integer()}},
           total_cost: float(),
           total_tokens: non_neg_integer(),
           model_tier: atom(),
@@ -97,6 +121,9 @@ defmodule AgentEx.Loop.Context do
       caller: Keyword.get(opts, :caller),
       metadata: Keyword.get(opts, :metadata, %{}),
       messages: Keyword.get(opts, :messages, []),
+      mode: Keyword.get(opts, :mode, :agentic),
+      phase: Keyword.get(opts, :phase, :execute),
+      plan: Keyword.get(opts, :plan),
       core_tools: Keyword.get(opts, :core_tools, []),
       tools: Keyword.get(opts, :tools, []),
       model_tier: Keyword.get(opts, :model_tier, :primary),

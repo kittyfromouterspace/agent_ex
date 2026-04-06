@@ -135,7 +135,7 @@ defmodule AgentEx.Memory.MemoryManager do
     context
   end
 
-  def optimize_context(prompt, context, budget_chars, nil) do
+  def optimize_context(_prompt, context, budget_chars, nil) do
     # No LLM function provided — just truncate
     if byte_size(context) < budget_chars * 2 do
       String.slice(context, 0, budget_chars)

@@ -8,7 +8,7 @@ defmodule AgentEx.Loop.Stage do
   - **Pass through**: call `next.(context)` to continue the pipeline
   - **Short-circuit**: return `{:done, result}` to stop the pipeline
   - **Transform**: modify context before calling `next`
-  - **Loop**: call `next` multiple times (e.g. StopReasonRouter)
+  - **Loop**: call `next` multiple times (e.g. ModeRouter)
 
   Stages optionally declare a `model_tier/0` if they need an LLM model.
   """

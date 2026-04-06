@@ -2,7 +2,7 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
   @moduledoc """
   Executes pending tool calls and re-enters the loop.
 
-  When `StopReasonRouter` detects a `tool_use` stop_reason, it stores the tool
+  When `ModeRouter` detects a `tool_use` stop_reason, it stores the tool
   calls in `ctx.pending_tool_calls`. This stage executes them, appends tool
   results to messages, rebuilds the tool list, and re-invokes the full pipeline.
 

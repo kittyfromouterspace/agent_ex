@@ -64,4 +64,61 @@ defmodule AgentEx.TestHelpers do
     ctx = AgentEx.Loop.Context.new(opts)
     AgentEx.Tools.Activation.init(ctx)
   end
+
+  @doc "Build a Context for agentic_planned mode tests."
+  def build_planned_ctx(overrides \\ []) do
+    build_ctx(Keyword.merge([mode: :agentic_planned, phase: :plan], overrides))
+  end
+
+  @doc "Build a Context for turn_by_turn mode tests."
+  def build_turn_by_turn_ctx(overrides \\ []) do
+    build_ctx(
+      Keyword.merge(
+        [
+          mode: :turn_by_turn,
+          phase: :review,
+          callbacks: mock_callbacks(on_human_input: mock_human_callback([{:approve, "ok"}]))
+        ],
+        overrides
+      )
+    )
+  end
+
+  @doc "Mock human callback that returns a sequence of responses."
+  def mock_human_callback(responses) do
+    fn _proposal, ctx ->
+      case responses do
+        [{:approve, _} | _rest] ->
+          {:approve, ctx}
+
+        [{:approve, _feedback, _ctx} | _rest] ->
+          {:approve, _feedback, ctx}
+
+        [{:abort, reason} | _rest] ->
+          {:abort, reason}
+
+        [] ->
+          {:abort, "no more responses"}
+      end
+    end
+  end
+
+  @doc "Mock LLM that returns a plan response with the given steps."
+  def mock_llm_plan_response(steps) do
+    fn _params ->
+      text =
+        steps
+        |> Enum.map_join("\n", fn s ->
+          "Step #{s[:index] + 1}: #{s[:description]}"
+        end)
+
+      {:ok,
+       %{
+         "content" => [%{"type" => "text", "text" => text}],
+         "stop_reason" => "end_turn",
+         "usage" => %{"input_tokens" => 100, "output_tokens" => 80},
+         "cost" => 0.002
+       }}
+    end
+  end
 end

@@ -7,11 +7,11 @@ defmodule AgentEx.Loop.Engine do
 
   ## Usage
 
-      Engine.run(context, [ContextGuard, LLMCall, StopReasonRouter, ToolExecutor])
+      Engine.run(context, [ContextGuard, LLMCall, ModeRouter, ToolExecutor])
 
   ## Stop-reason routing
 
-  The loop doesn't use a step counter. The `StopReasonRouter` stage decides
+  The loop doesn't use a step counter. The `ModeRouter` stage decides
   whether to loop (tool_use), terminate (end_turn), or compact (max_tokens).
   A hard `max_turns` limit exists only as a safety rail.
   """

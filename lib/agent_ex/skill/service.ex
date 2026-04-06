@@ -653,7 +653,7 @@ defmodule AgentEx.Skill.Service do
 
   # --- Private: GitHub auth ---
 
-  defp github_token(opts \\ []) do
+  defp github_token(opts) do
     get_secret = Keyword.get(opts, :get_secret)
 
     cond do

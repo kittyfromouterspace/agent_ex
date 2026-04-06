@@ -4,7 +4,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
 
   Uses the `llm_chat` callback from `ctx.callbacks` to make the actual API call.
   The response is stored in `ctx.last_response` for the next stage
-  (typically StopReasonRouter) to process.
+  (typically ModeRouter) to process.
   """
 
   @behaviour AgentEx.Loop.Stage

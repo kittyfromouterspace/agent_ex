@@ -56,7 +56,9 @@ defmodule AgentEx do
   - `:callbacks` — map of callback functions (required, at minimum `:llm_chat`)
   - `:system_prompt` — custom system prompt (optional, auto-assembled if omitted)
   - `:history` — list of prior conversation messages (optional)
-  - `:profile` — loop profile `:agentic` or `:conversational` (optional, default `:agentic`)
+  - `:profile` — loop profile (optional, default `:agentic`)
+  - `:mode` — execution mode `:agentic | :agentic_planned | :turn_by_turn | :conversational` (optional, overrides `:profile`)
+  - `:plan` — pre-built plan map for `:agentic_planned` mode, skips planning phase (optional)
   - `:model_tier` — model tier for LLM calls (optional, default `:primary`)
   - `:session_id` — for telemetry and event tracking (optional)
   - `:user_id` — for API key resolution (optional)
@@ -71,13 +73,15 @@ defmodule AgentEx do
     workspace = Keyword.fetch!(opts, :workspace)
     callbacks = Keyword.fetch!(opts, :callbacks)
     history = Keyword.get(opts, :history, [])
-    profile_name = Keyword.get(opts, :profile, :agentic)
+    mode = Keyword.get(opts, :mode, :agentic)
+    profile_name = Keyword.get_lazy(opts, :profile, fn -> mode end)
     model_tier = Keyword.get(opts, :model_tier, :primary)
     session_id = Keyword.get(opts, :session_id, generate_session_id())
     user_id = Keyword.get(opts, :user_id)
     caller = Keyword.get(opts, :caller, self())
     workspace_id = Keyword.get(opts, :workspace_id)
     cost_limit = Keyword.get(opts, :cost_limit, 5.0)
+    prebuilt_plan = Keyword.get(opts, :plan)
 
     system_prompt =
       Keyword.get_lazy(opts, :system_prompt, fn ->
@@ -89,7 +93,6 @@ defmodule AgentEx do
         history ++
         [%{"role" => "user", "content" => prompt}]
 
-    # Merge default tool handler into callbacks if not provided
     callbacks =
       Map.put_new(callbacks, :execute_tool, fn name, input, ctx ->
         Tools.execute(name, input, ctx)
@@ -99,6 +102,15 @@ defmodule AgentEx do
 
     config = Profile.config(profile_name)
     config = Map.put(config, :session_cost_limit_usd, cost_limit)
+
+    initial_phase = AgentEx.Loop.Phase.initial_phase(mode)
+
+    effective_phase =
+      if prebuilt_plan != nil and mode == :agentic_planned do
+        :execute
+      else
+        initial_phase
+      end
 
     ctx =
       Context.new(
@@ -113,6 +125,15 @@ defmodule AgentEx do
         config: config,
         callbacks: callbacks
       )
+
+    ctx = %{ctx | mode: mode, phase: effective_phase}
+
+    ctx =
+      if prebuilt_plan != nil do
+        %{ctx | plan: prebuilt_plan}
+      else
+        ctx
+      end
 
     ctx = Activation.init(ctx)
 
