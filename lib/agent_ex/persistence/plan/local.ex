@@ -74,7 +74,9 @@ defmodule AgentEx.Persistence.Plan.Local do
               {:ok, content} ->
                 plan = Jason.decode!(content, keys: :atoms)
                 steps = plan.steps || []
-                completed = Enum.count(steps, &(&1.status == :complete))
+
+                completed =
+                  Enum.count(steps, &(&1.status == :complete or &1.status == "complete"))
 
                 %{
                   id: plan_id,

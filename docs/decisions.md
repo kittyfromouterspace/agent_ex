@@ -89,4 +89,55 @@
 
 ---
 
-*Decisions will be appended as implementation progresses.*
+## D011: Per-Tool Output Clipping via Module Attribute
+- **Date:** 2026-04-06
+- **Decision:** ToolExecutor clips tool output based on per-tool byte limits defined in a `@default_max_output_bytes` module attribute. Host overrides via `Process.put(:tool_max_output_bytes, map)`.
+- **Rationale:** Prevents single large file reads from blowing context. The defaults (50KB for `read_file`, 1MB for `bash`, 10KB for `list_files`) cover the common cases. `Process.put` allows per-request overrides without changing the stage API.
+- **Alternatives:** Config-based limits, per-tool callback. Module attribute + Process dictionary is simplest and has zero API surface change.
+
+---
+
+## D012: File-Read Deduplication Tracking
+- **Date:** 2026-04-06
+- **Decision:** ToolExecutor tracks `read_file` calls in `ctx.file_reads` (path → %{hash, last_read_turn}). Actual deduplication (replacing older reads with summaries) deferred to ContextGuard integration.
+- **Rationale:** The tracking is cheap and unobtrusive. The compaction policy (which older reads to summarize) belongs in ContextGuard, not ToolExecutor. This keeps the stages single-responsibility.
+
+---
+
+## D013: ContinuationDetector — Pure Regex, No ML
+- **Date:** 2026-04-06
+- **Decision:** Port ContinuationDetector from Homunculus using regex patterns only. Five detection categories: step_complete, task_complete, continuation, blocker, summary.
+- **Rationale:** Regex is sufficient for the structured output patterns LLMs produce. No NLP dependency needed. The `detect/2` function returns confidence scores for optional filtering. Question-ending text (`?`) is excluded from task_complete to reduce false positives.
+- **Source:** porting-analysis.md §1.4 (ContinuationDetector)
+
+---
+
+## D014: ContextCompression — Two-Tier Strategy
+- **Date:** 2026-04-06
+- **Decision:** Port the two-tier truncation/summarization pattern from Homunculus. Truncate when context is <2× budget (cheap, fast). LLM summarize when ≥2× budget (expensive but thorough). Fall back to truncation on LLM error.
+- **Rationale:** The 2× threshold balances cost vs quality. Simple truncation is always available as a fallback. The LLM summarization uses the `llm_chat` callback with `model_tier: "lightweight"` to minimize cost.
+- **Source:** porting-analysis.md §15.1.3 (MemoryManager.optimize_context)
+
+---
+
+## D015: LLMSemaphore — Process-Based Concurrency
+- **Date:** 2026-04-06
+- **Decision:** Port LLMSemaphore as a GenServer with automatic permit release on process crash via `Process.monitor/1`.
+- **Rationale:** Subagents (V2.0) will need bounded concurrency. The semaphore is the foundation. Automatic crash cleanup prevents deadlocks when child processes die. FIFO ordering ensures fairness.
+- **Source:** porting-analysis.md §15.1.2 (SCE semaphore)
+
+---
+
+## D016: Persistence Backend JSON Atom/String Normalization
+- **Date:** 2026-04-06
+- **Decision:** `Plan.Local.list_plans/2` counts completed steps using `status == :complete or status == "complete"`. Does not normalize at read time.
+- **Rationale:** Jason serializes atoms as strings, so a round-trip through JSON turns `:complete` into `"complete"`. Normalizing at read time would require knowing which fields are atom-typed, which is fragile. Accepting both is pragmatic for V1.1. A future V2 task should add a proper serialization layer.
+- **Source:** Discovered during persistence backend testing.
+
+---
+
+## D017: Integration Tests Test Stage Interactions, Not Full Engine Loops
+- **Date:** 2026-04-06
+- **Decision:** Integration tests for `:agentic_planned` and `:turn_by_turn` test stage interactions (PlanBuilder → ModeRouter → PlanTracker) rather than full `Engine.run` pipelines.
+- **Rationale:** `Engine.run` is a single-pass pipeline with no built-in looping. Multi-turn behavior requires `reentry_pipeline` which is set up by the host application, not the engine. Testing individual stage interactions validates the integration without fighting the engine's single-pass nature. CommitmentGate intercepts uncommitted "I will..." text, making full-pipeline tests fragile.
+- **Source:** Discovered during integration test writing.

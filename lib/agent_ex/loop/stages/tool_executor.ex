@@ -139,9 +139,19 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
         end
       end
 
+      content = sanitize_tool_output(result, name)
+
+      ctx =
+        if name == "read_file" and not is_error do
+          path = call["input"]["path"] || call["input"]["file"]
+          track_file_read(ctx, path)
+        else
+          ctx
+        end
+
       {%{
          "tool_use_id" => call["id"],
-         "content" => sanitize_tool_output(result),
+         "content" => content,
          "is_error" => is_error
        }, ctx}
     end)
@@ -167,7 +177,24 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
     ctx.core_tools ++ activated
   end
 
-  defp sanitize_tool_output(output) when is_binary(output) do
+  @default_max_output_bytes %{
+    "bash" => 1_000_000,
+    "read_file" => 50_000,
+    "list_files" => 10_000,
+    "grep" => 50_000
+  }
+
+  defp sanitize_tool_output(output, name)
+
+  defp sanitize_tool_output(output, name) when is_binary(output) do
+    output
+    |> ensure_valid_utf8()
+    |> clip_output(name)
+  end
+
+  defp sanitize_tool_output(output, _name), do: output
+
+  defp ensure_valid_utf8(output) do
     if String.valid?(output) do
       output
     else
@@ -175,5 +202,35 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
     end
   end
 
-  defp sanitize_tool_output(output), do: output
+  defp clip_output(output, nil), do: output
+
+  defp clip_output(output, name) do
+    max_bytes = max_output_bytes(name, output)
+
+    if byte_size(output) > max_bytes do
+      String.slice(output, 0, max_bytes) <>
+        "\n[truncated at #{max_bytes} bytes, original #{byte_size(output)} bytes]"
+    else
+      output
+    end
+  end
+
+  defp max_output_bytes(name, _output) do
+    custom =
+      case Process.get(:tool_max_output_bytes) do
+        map when is_map(map) -> Map.get(map, name)
+        _ -> nil
+      end
+
+    custom || Map.get(@default_max_output_bytes, name, 1_000_000)
+  end
+
+  defp track_file_read(ctx, nil), do: ctx
+
+  defp track_file_read(ctx, path) do
+    _existing = Map.get(ctx.file_reads, path)
+    entry = %{hash: :erlang.phash2(path), last_read_turn: ctx.turns_used}
+    updated = Map.put(ctx.file_reads, path, entry)
+    %{ctx | file_reads: updated}
+  end
 end
