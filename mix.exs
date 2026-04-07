@@ -25,6 +25,7 @@ defmodule AgentEx.MixProject do
 
   defp deps do
     [
+      {:telemetry, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:yaml_elixir, "~> 2.9"},
       {:req, "~> 0.5"},

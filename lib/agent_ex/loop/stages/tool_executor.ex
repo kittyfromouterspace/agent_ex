@@ -20,6 +20,7 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
   alias AgentEx.CircuitBreaker
   alias AgentEx.Loop.Context
   alias AgentEx.Tools.Activation
+  alias AgentEx.Telemetry
 
   require Logger
 
@@ -92,20 +93,14 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
         {:tool_trace, name, call["input"], trace_output, is_error, workspace_id}
       )
 
-      telemetry_prefix = ctx.config[:telemetry_prefix] || [:agent_ex]
+      tool_duration = System.monotonic_time() - tool_start_time
+      output_bytes = if is_binary(result), do: byte_size(result), else: 0
 
-      try do
-        tool_duration = System.monotonic_time() - tool_start_time
-        output_bytes = if is_binary(result), do: byte_size(result), else: 0
-
-        :telemetry.execute(
-          telemetry_prefix ++ [:tool, :stop],
-          %{duration: tool_duration, output_bytes: output_bytes},
-          %{tool_name: name, success: not is_error, session_id: ctx.session_id}
-        )
-      rescue
-        _ -> :ok
-      end
+      Telemetry.event([:tool, :stop], %{duration: tool_duration, output_bytes: output_bytes}, %{
+        tool_name: name,
+        success: not is_error,
+        session_id: ctx.session_id
+      })
 
       # Run optional fact extraction callback
       if cb = ctx.callbacks[:on_tool_facts] do

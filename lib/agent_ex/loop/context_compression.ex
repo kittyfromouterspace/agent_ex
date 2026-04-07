@@ -13,6 +13,7 @@ defmodule AgentEx.Loop.ContextCompression do
   """
 
   alias AgentEx.Loop.Context
+  alias AgentEx.Loop.Helpers
 
   @chars_per_token 3.5
   @max_summary_tokens 2000
@@ -169,11 +170,7 @@ defmodule AgentEx.Loop.ContextCompression do
 
   defp extract_text(content) when is_binary(content), do: content
 
-  defp extract_text(content) when is_list(content) do
-    content
-    |> Enum.filter(&(&1["type"] == "text"))
-    |> Enum.map_join("", &(&1["text"] || ""))
-  end
+  defp extract_text(content) when is_list(content), do: Helpers.extract_text(content)
 
   defp extract_text(_), do: ""
 end

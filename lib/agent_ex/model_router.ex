@@ -13,6 +13,8 @@ defmodule AgentEx.ModelRouter do
   `"_route"`, allowing the host to route to the correct provider.
   """
 
+  use GenServer
+
   alias AgentEx.ModelRouter.Free
 
   require Logger

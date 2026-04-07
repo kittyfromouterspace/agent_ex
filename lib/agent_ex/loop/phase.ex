@@ -51,6 +51,13 @@ defmodule AgentEx.Loop.Phase do
     allowed = Map.get(transitions, ctx.phase, [])
 
     if next_phase in allowed do
+      AgentEx.Telemetry.event([:phase, :transition], %{}, %{
+        session_id: ctx.session_id,
+        mode: ctx.mode,
+        from: ctx.phase,
+        to: next_phase
+      })
+
       {:ok, %{ctx | phase: next_phase}}
     else
       {:error, {:invalid_transition, ctx.mode, ctx.phase, next_phase}}

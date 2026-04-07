@@ -11,6 +11,8 @@ defmodule AgentEx.Loop.Stages.ProgressInjector do
 
   @behaviour AgentEx.Loop.Stage
 
+  @behaviour AgentEx.Loop.Stage
+
   alias AgentEx.Loop.Context
 
   @impl true

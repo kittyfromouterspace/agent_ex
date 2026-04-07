@@ -14,6 +14,7 @@ defmodule AgentEx.Loop.Stages.PlanBuilder do
   @behaviour AgentEx.Loop.Stage
 
   alias AgentEx.Loop.Context
+  alias AgentEx.Loop.Helpers
 
   @plan_prompt """
   Break this task into a numbered list of concrete steps. For each step, describe:
@@ -53,7 +54,7 @@ defmodule AgentEx.Loop.Stages.PlanBuilder do
     |> Enum.reverse()
     |> Enum.find_value(fn msg ->
       if msg["role"] == "user" do
-        extract_text(msg["content"])
+        Helpers.extract_text(msg["content"])
       end
     end)
   end
@@ -66,14 +67,4 @@ defmodule AgentEx.Loop.Stages.PlanBuilder do
 
     %{ctx | messages: ctx.messages ++ [plan_msg]}
   end
-
-  defp extract_text(content) when is_binary(content), do: content
-
-  defp extract_text(content) when is_list(content) do
-    content
-    |> Enum.filter(&(&1["type"] == "text"))
-    |> Enum.map_join("", &(&1["text"] || ""))
-  end
-
-  defp extract_text(_), do: ""
 end

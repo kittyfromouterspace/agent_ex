@@ -173,10 +173,27 @@ defmodule AgentEx.Memory.ContextKeeper do
     # Cap at @max_facts, drop oldest
     trimmed =
       if length(combined) > @max_facts do
-        Enum.take(combined, -@max_facts)
+        evicted = length(combined) - @max_facts
+        trimmed = Enum.take(combined, -@max_facts)
+
+        :telemetry.execute(
+          [:agent_ex, :memory, :evict],
+          %{evicted_count: evicted, remaining_count: @max_facts},
+          %{workspace_id: state.workspace_id}
+        )
+
+        trimmed
       else
         combined
       end
+
+    if length(stamped) > 0 do
+      :telemetry.execute(
+        [:agent_ex, :memory, :ingest],
+        %{fact_count: length(stamped)},
+        %{workspace_id: state.workspace_id}
+      )
+    end
 
     {:noreply, %{state | facts: trimmed}}
   end

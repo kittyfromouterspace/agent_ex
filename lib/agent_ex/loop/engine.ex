@@ -17,6 +17,7 @@ defmodule AgentEx.Loop.Engine do
   """
 
   alias AgentEx.Loop.Context
+  alias AgentEx.Telemetry
 
   require Logger
 
@@ -54,7 +55,26 @@ defmodule AgentEx.Loop.Engine do
     stages
     |> Enum.reverse()
     |> Enum.reduce(terminal, fn stage_mod, next ->
-      fn ctx -> stage_mod.call(ctx, next) end
+      fn ctx ->
+        stage_name = stage_mod |> Module.split() |> List.last()
+        start = System.monotonic_time()
+
+        Telemetry.event([:pipeline, :stage, :start], %{}, %{
+          session_id: ctx.session_id,
+          stage: stage_name
+        })
+
+        result = stage_mod.call(ctx, next)
+
+        duration = System.monotonic_time() - start
+
+        Telemetry.event([:pipeline, :stage, :stop], %{duration: duration}, %{
+          session_id: ctx.session_id,
+          stage: stage_name
+        })
+
+        result
+      end
     end)
   end
 

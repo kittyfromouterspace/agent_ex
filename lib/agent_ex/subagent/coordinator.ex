@@ -14,6 +14,8 @@ defmodule AgentEx.Subagent.Coordinator do
 
   use GenServer
 
+  require Logger
+
   @max_concurrent 5
   @idle_timeout_ms 30_000
 
@@ -86,14 +88,51 @@ defmodule AgentEx.Subagent.Coordinator do
 
       task =
         Task.async(fn ->
-          AgentEx.run(
-            prompt: task_prompt,
-            workspace: workspace,
-            session_id: sub_session_id,
-            mode: :agentic,
-            max_turns: max_turns,
-            callbacks: callbacks
+          :telemetry.execute(
+            [:agent_ex, :subagent, :spawn],
+            %{},
+            %{
+              session_id: sub_session_id,
+              parent_session_id: parent_session_id,
+              depth: parent_depth + 1
+            }
           )
+
+          start = System.monotonic_time()
+
+          result =
+            AgentEx.run(
+              prompt: task_prompt,
+              workspace: workspace,
+              session_id: sub_session_id,
+              mode: :agentic,
+              max_turns: max_turns,
+              callbacks: callbacks
+            )
+
+          duration = System.monotonic_time() - start
+
+          case result do
+            {:ok, res} ->
+              :telemetry.execute(
+                [:agent_ex, :subagent, :complete],
+                %{duration: duration, cost: res.cost, steps: res.steps},
+                %{session_id: sub_session_id, parent_session_id: parent_session_id}
+              )
+
+            {:error, reason} ->
+              :telemetry.execute(
+                [:agent_ex, :subagent, :error],
+                %{duration: duration},
+                %{
+                  session_id: sub_session_id,
+                  parent_session_id: parent_session_id,
+                  error: inspect(reason)
+                }
+              )
+          end
+
+          result
         end)
 
       ref = task.ref

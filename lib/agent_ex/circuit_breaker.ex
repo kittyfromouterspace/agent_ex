@@ -51,6 +51,7 @@ defmodule AgentEx.CircuitBreaker do
       :half_open ->
         :ets.insert(@table, {tool_name, :closed, 0, 0})
         Logger.info("CircuitBreaker: #{tool_name} recovered (half_open -> closed)")
+        :telemetry.execute([:agent_ex, :circuit_breaker, :recover], %{}, %{tool_name: tool_name})
 
       _ ->
         :ets.insert(@table, {tool_name, :closed, 0, 0})
@@ -69,6 +70,12 @@ defmodule AgentEx.CircuitBreaker do
         opened_at = System.monotonic_time(:millisecond)
         :ets.insert(@table, {tool_name, :open, @failure_threshold, opened_at})
 
+        :telemetry.execute(
+          [:agent_ex, :circuit_breaker, :trip],
+          %{failure_count: @failure_threshold},
+          %{tool_name: tool_name}
+        )
+
         Logger.warning(
           "CircuitBreaker: #{tool_name} failed during recovery test (half_open -> open)"
         )
@@ -79,6 +86,12 @@ defmodule AgentEx.CircuitBreaker do
         if new_failures >= @failure_threshold do
           opened_at = System.monotonic_time(:millisecond)
           :ets.insert(@table, {tool_name, :open, new_failures, opened_at})
+
+          :telemetry.execute(
+            [:agent_ex, :circuit_breaker, :trip],
+            %{failure_count: new_failures},
+            %{tool_name: tool_name}
+          )
 
           Logger.warning(
             "CircuitBreaker: #{tool_name} tripped after #{new_failures} failures (closed -> open)"

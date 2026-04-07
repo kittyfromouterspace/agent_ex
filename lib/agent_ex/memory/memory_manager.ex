@@ -20,6 +20,7 @@ defmodule AgentEx.Memory.MemoryManager do
   """
 
   alias AgentEx.Memory.ContextKeeper
+  alias AgentEx.Telemetry
 
   require Logger
 
@@ -161,13 +162,15 @@ defmodule AgentEx.Memory.MemoryManager do
     duration = System.monotonic_time() - start_time
     context_chars = if is_binary(context), do: String.length(context), else: 0
 
-    :telemetry.execute(
-      [:agent_ex, :memory, :retrieval, :stop],
-      %{duration: duration, context_chars: context_chars, cache_hit: cache_hit},
+    Telemetry.event(
+      [:memory, :retrieval, :stop],
+      %{
+        duration: duration,
+        context_chars: context_chars,
+        cache_hit: cache_hit
+      },
       %{workspace_id: workspace_id, incremental: incremental}
     )
-  rescue
-    _ -> :ok
   end
 
   # -- Private --

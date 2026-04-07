@@ -13,6 +13,7 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorder do
   @behaviour AgentEx.Loop.Stage
 
   alias AgentEx.Loop.Context
+  alias AgentEx.Loop.Helpers
 
   @impl true
   def call(%Context{} = ctx, next) do
@@ -78,8 +79,7 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorder do
 
   defp text_preview(content) when is_list(content) do
     content
-    |> Enum.filter(&(&1["type"] == "text"))
-    |> Enum.map_join("", &(&1["text"] || ""))
+    |> Helpers.extract_text()
     |> String.slice(0, 500)
   end
 

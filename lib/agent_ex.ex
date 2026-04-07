@@ -44,6 +44,7 @@ defmodule AgentEx do
   alias AgentEx.ModelRouter
   alias AgentEx.Tools
   alias AgentEx.Tools.Activation
+  alias AgentEx.Telemetry
 
   require Logger
 
@@ -157,7 +158,34 @@ defmodule AgentEx do
     pipeline = Engine.build_pipeline(stages)
     ctx = %{ctx | reentry_pipeline: pipeline}
 
-    Engine.run(ctx, stages)
+    Telemetry.event([:session, :start], %{}, %{
+      session_id: session_id,
+      mode: mode,
+      profile: profile_name
+    })
+
+    session_start = System.monotonic_time()
+
+    result = Engine.run(ctx, stages)
+
+    session_duration = System.monotonic_time() - session_start
+
+    case result do
+      {:ok, res} ->
+        Telemetry.event([:session, :stop], Map.put(res, :duration, session_duration), %{
+          session_id: session_id,
+          mode: mode
+        })
+
+      {:error, reason} ->
+        Telemetry.event([:session, :error], %{duration: session_duration}, %{
+          session_id: session_id,
+          mode: mode,
+          error: inspect(reason)
+        })
+    end
+
+    result
   end
 
   @doc "Scaffold a new workspace directory with default identity files."
@@ -188,6 +216,11 @@ defmodule AgentEx do
     case backend.load(session_id, workspace: workspace) do
       {:ok, events} when events != [] ->
         {messages, turns_used, cost, tokens, plan} = reconstruct_from_events(events)
+
+        Telemetry.event([:session, :resume], %{}, %{
+          session_id: session_id,
+          turns_restored: turns_used
+        })
 
         mode = Keyword.get(opts, :mode, :agentic)
         profile_name = Keyword.get_lazy(opts, :profile, fn -> mode end)

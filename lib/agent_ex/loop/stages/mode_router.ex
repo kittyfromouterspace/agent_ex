@@ -32,7 +32,9 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
   @behaviour AgentEx.Loop.Stage
 
   alias AgentEx.Loop.Context
+  alias AgentEx.Loop.Helpers
   alias AgentEx.Loop.Phase
+  alias AgentEx.Telemetry
 
   require Logger
 
@@ -48,17 +50,18 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
   # --- max_tokens: always return what we have ---
   defp route(ctx, _next, "max_tokens", content) do
     Logger.warning("ModeRouter: max_tokens hit for #{ctx.session_id}")
-    text = extract_text(content)
-    ctx = %{ctx | accumulated_text: join_text(ctx.accumulated_text, text)}
-    {:done, result_from_context(ctx)}
+    text = Helpers.extract_text(content)
+    ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
+    emit_route_event(ctx, "max_tokens", "done")
+    {:done, Helpers.result_from_context(ctx)}
   end
 
-  # --- :conversational ---
   defp route(%Context{mode: :conversational} = ctx, _next, "end_turn", content) do
-    text = extract_text(content)
+    text = Helpers.extract_text(content)
     maybe_run_callback(ctx.callbacks[:on_response_facts], ctx, text)
-    ctx = %{ctx | accumulated_text: join_text(ctx.accumulated_text, text)}
-    {:done, result_from_context(ctx)}
+    ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
+    emit_route_event(ctx, "end_turn", "done")
+    {:done, Helpers.result_from_context(ctx)}
   end
 
   # --- :agentic, :execute, end_turn ---
@@ -73,11 +76,15 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
 
   # --- :agentic_planned, :plan, end_turn ---
   defp route(%Context{mode: :agentic_planned, phase: :plan} = ctx, next, "end_turn", content) do
-    text = extract_text(content)
+    text = Helpers.extract_text(content)
     maybe_run_callback(ctx.callbacks[:on_response_facts], ctx, text)
 
     plan = parse_plan(text)
     ctx = %{ctx | plan: plan}
+
+    Telemetry.event([:plan, :created], %{step_count: length(plan[:steps] || [])}, %{
+      session_id: ctx.session_id
+    })
 
     ctx =
       if cb = ctx.callbacks[:on_plan_created] do
@@ -90,68 +97,73 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
       end
 
     ctx = Phase.transition!(ctx, :execute)
+    emit_route_event(ctx, "end_turn", "reentry")
     reentry_or_next(ctx, next)
   end
 
-  # --- :agentic_planned, :execute, end_turn ---
   defp route(%Context{mode: :agentic_planned, phase: :execute} = ctx, next, "end_turn", content) do
+    emit_route_event(ctx, "end_turn", "next")
     handle_agentic_end_turn(ctx, next, content)
   end
 
-  # --- :agentic_planned, :execute, tool_use ---
   defp route(%Context{mode: :agentic_planned, phase: :execute} = ctx, next, "tool_use", content) do
+    emit_route_event(ctx, "tool_use", "next")
     handle_tool_use(ctx, next, content)
   end
 
-  # --- :agentic_planned, :verify, end_turn ---
   defp route(%Context{mode: :agentic_planned, phase: :verify} = ctx, _next, "end_turn", content) do
-    text = extract_text(content)
-    ctx = %{ctx | accumulated_text: join_text(ctx.accumulated_text, text)}
-    {:done, result_from_context(ctx)}
+    text = Helpers.extract_text(content)
+    ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
+    emit_route_event(ctx, "end_turn", "done")
+    {:done, Helpers.result_from_context(ctx)}
   end
 
-  # --- :turn_by_turn, :review, end_turn ---
   defp route(%Context{mode: :turn_by_turn, phase: :review} = ctx, next, "end_turn", content) do
-    text = extract_text(content)
+    text = Helpers.extract_text(content)
     maybe_run_callback(ctx.callbacks[:on_response_facts], ctx, text)
-    ctx = %{ctx | accumulated_text: join_text(ctx.accumulated_text, text)}
+    ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
+    emit_route_event(ctx, "end_turn", "next")
     next.(ctx)
   end
 
-  # --- :turn_by_turn, :review, tool_use ---
   defp route(%Context{mode: :turn_by_turn, phase: :review} = ctx, next, "tool_use", content) do
+    emit_route_event(ctx, "tool_use", "next")
     handle_tool_use(ctx, next, content)
   end
 
-  # --- :turn_by_turn, :execute, end_turn ---
   defp route(%Context{mode: :turn_by_turn, phase: :execute} = ctx, next, "end_turn", content) do
-    text = extract_text(content)
+    text = Helpers.extract_text(content)
     maybe_run_callback(ctx.callbacks[:on_response_facts], ctx, text)
 
-    ctx = %{ctx | accumulated_text: join_text(ctx.accumulated_text, text)}
+    ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
 
     case Phase.transition(ctx, :review) do
-      {:ok, ctx} -> reentry_or_next(ctx, next)
-      {:error, _} -> {:done, result_from_context(ctx)}
+      {:ok, ctx} ->
+        emit_route_event(ctx, "end_turn", "reentry")
+        reentry_or_next(ctx, next)
+
+      {:error, _} ->
+        emit_route_event(ctx, "end_turn", "done")
+        {:done, Helpers.result_from_context(ctx)}
     end
   end
 
-  # --- :turn_by_turn, :execute, tool_use ---
   defp route(%Context{mode: :turn_by_turn, phase: :execute} = ctx, next, "tool_use", content) do
+    emit_route_event(ctx, "tool_use", "next")
     handle_tool_use(ctx, next, content)
   end
 
-  # --- fallback: treat as end_turn and done ---
   defp route(ctx, _next, _stop_reason, content) do
-    text = extract_text(content)
-    ctx = %{ctx | accumulated_text: join_text(ctx.accumulated_text, text)}
-    {:done, result_from_context(ctx)}
+    text = Helpers.extract_text(content)
+    ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
+    emit_route_event(ctx, "unknown", "done")
+    {:done, Helpers.result_from_context(ctx)}
   end
 
   # --- Shared handlers ---
 
   defp handle_agentic_end_turn(ctx, next, content) do
-    text = extract_text(content)
+    text = Helpers.extract_text(content)
     maybe_run_callback(ctx.callbacks[:on_response_facts], ctx, text)
 
     if text == "" and ctx.accumulated_text == "" and ctx.turns_used > 0 and
@@ -176,17 +188,17 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
 
       reentry_or_next(ctx, next)
     else
-      ctx = %{ctx | accumulated_text: join_text(ctx.accumulated_text, text)}
+      ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
       maybe_run_callback(ctx.callbacks[:on_persist_turn], ctx, text)
       next.(ctx)
     end
   end
 
   defp handle_tool_use(ctx, next, content) do
-    text = extract_text(content)
+    text = Helpers.extract_text(content)
     maybe_run_callback(ctx.callbacks[:on_response_facts], ctx, text)
 
-    tool_calls = extract_tool_calls(content)
+    tool_calls = Helpers.extract_tool_calls(content)
     tool_names = Enum.map(tool_calls, & &1["name"])
     assistant_msg = %{"role" => "assistant", "content" => content}
 
@@ -211,7 +223,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
         "ModeRouter: max_turns (#{ctx.config.max_turns}) reached for #{ctx.session_id}"
       )
 
-      {:done, result_from_context(ctx)}
+      {:done, Helpers.result_from_context(ctx)}
     else
       next.(ctx)
     end
@@ -279,32 +291,15 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     end
   end
 
-  defp result_from_context(ctx) do
-    %{
-      text: ctx.accumulated_text,
-      cost: ctx.total_cost,
-      tokens: ctx.total_tokens,
-      steps: ctx.turns_used
-    }
+  defp emit_route_event(ctx, stop_reason, action) do
+    Telemetry.event([:mode_router, :route], %{}, %{
+      session_id: ctx.session_id,
+      mode: ctx.mode,
+      phase: ctx.phase,
+      stop_reason: stop_reason,
+      action: action
+    })
   end
-
-  defp extract_text(content) when is_list(content) do
-    content
-    |> Enum.filter(&(&1["type"] == "text"))
-    |> Enum.map_join("", &(&1["text"] || ""))
-  end
-
-  defp extract_text(_), do: ""
-
-  defp extract_tool_calls(content) when is_list(content) do
-    Enum.filter(content, &(&1["type"] == "tool_use"))
-  end
-
-  defp extract_tool_calls(_), do: []
-
-  defp join_text("", text), do: text
-  defp join_text(acc, ""), do: acc
-  defp join_text(acc, text), do: acc <> "\n\n" <> text
 
   defp maybe_run_callback(nil, _ctx, _text), do: :ok
   defp maybe_run_callback(_cb, _ctx, ""), do: :ok

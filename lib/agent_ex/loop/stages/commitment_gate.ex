@@ -14,7 +14,9 @@ defmodule AgentEx.Loop.Stages.CommitmentGate do
   @behaviour AgentEx.Loop.Stage
 
   alias AgentEx.Loop.Context
+  alias AgentEx.Loop.Helpers
   alias AgentEx.Memory.CommitmentDetector
+  alias AgentEx.Telemetry
 
   require Logger
 
@@ -43,6 +45,14 @@ defmodule AgentEx.Loop.Stages.CommitmentGate do
       "CommitmentGate: intercepted unfulfilled commitment in #{ctx.session_id}: #{inspect(commitment)}"
     )
 
+    Telemetry.event(
+      [:commitment, :detected],
+      %{continuations: ctx.commitment_continuations + 1},
+      %{
+        session_id: ctx.session_id
+      }
+    )
+
     Context.emit_event(ctx, {:commitment_continuation, ctx.accumulated_text, workspace_id})
 
     response = ctx.last_response || %{}
@@ -68,16 +78,7 @@ defmodule AgentEx.Loop.Stages.CommitmentGate do
       ctx.reentry_pipeline.(ctx)
     else
       Logger.warning("CommitmentGate: no reentry pipeline available, falling through")
-      {:done, result_from_context(ctx)}
+      {:done, Helpers.result_from_context(ctx)}
     end
-  end
-
-  defp result_from_context(ctx) do
-    %{
-      text: ctx.accumulated_text,
-      cost: ctx.total_cost,
-      tokens: ctx.total_tokens,
-      steps: ctx.turns_used
-    }
   end
 end

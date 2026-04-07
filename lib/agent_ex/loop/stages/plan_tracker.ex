@@ -17,6 +17,7 @@ defmodule AgentEx.Loop.Stages.PlanTracker do
 
   alias AgentEx.Loop.Context
   alias AgentEx.Loop.Phase
+  alias AgentEx.Telemetry
 
   require Logger
 
@@ -35,6 +36,13 @@ defmodule AgentEx.Loop.Stages.PlanTracker do
       Logger.info(
         "PlanTracker: all steps complete for #{ctx.session_id}, transitioning to :verify"
       )
+
+      steps = ctx.plan[:steps] || []
+
+      Telemetry.event([:plan, :all_complete], %{}, %{
+        session_id: ctx.session_id,
+        total_steps: length(steps)
+      })
 
       case Phase.transition(ctx, :verify) do
         {:ok, ctx} -> next.(ctx)
@@ -68,6 +76,14 @@ defmodule AgentEx.Loop.Stages.PlanTracker do
             plan_step_index: current_index + 1,
             plan_steps_completed: ctx.plan_steps_completed ++ [current_index]
         }
+
+        total_steps = length(steps)
+
+        Telemetry.event([:plan, :step, :complete], %{}, %{
+          session_id: ctx.session_id,
+          step_index: current_index,
+          total_steps: total_steps
+        })
 
         maybe_invoke_step_callback(ctx, current_step)
 

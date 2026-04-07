@@ -24,7 +24,10 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   - `"prefix_changed"` — boolean, true when prefix differs from last call
   """
 
+  @behaviour AgentEx.Loop.Stage
+
   alias AgentEx.Loop.Context
+  alias AgentEx.Loop.Helpers
   alias AgentEx.ModelRouter
 
   require Logger
@@ -39,6 +42,11 @@ defmodule AgentEx.Loop.Stages.LLMCall do
     Logger.debug(
       "LLMCall: turn #{ctx.turns_used + 1}/#{ctx.config.max_turns} for #{ctx.session_id} (tier: #{tier})"
     )
+
+    AgentEx.Telemetry.event([:llm_call, :start], %{}, %{
+      session_id: ctx.session_id,
+      model_tier: tier
+    })
 
     {stable_prefix, _volatile_suffix} = split_messages(ctx.messages)
     stable_hash = compute_stable_hash(stable_prefix, ctx.tools)
@@ -82,24 +90,18 @@ defmodule AgentEx.Loop.Stages.LLMCall do
     case result do
       {:ok, response} ->
         duration = System.monotonic_time() - start_time
-        telemetry_prefix = ctx.config[:telemetry_prefix] || [:agent_ex]
+        usage = response["usage"] || %{}
 
-        try do
-          usage = response["usage"] || %{}
-
-          :telemetry.execute(
-            telemetry_prefix ++ [:llm_call, :stop],
-            %{
-              duration: duration,
-              input_tokens: usage["input_tokens"] || 0,
-              output_tokens: usage["output_tokens"] || 0,
-              cost_usd: response["cost"] || 0.0
-            },
-            %{model_tier: tier, session_id: ctx.session_id, route: route && route.model_id}
-          )
-        rescue
-          _ -> :ok
-        end
+        AgentEx.Telemetry.event(
+          [:llm_call, :stop],
+          %{
+            duration: duration,
+            input_tokens: usage["input_tokens"] || 0,
+            output_tokens: usage["output_tokens"] || 0,
+            cost_usd: response["cost"] || 0.0
+          },
+          %{model_tier: tier, session_id: ctx.session_id, route: route && route.model_id}
+        )
 
         ctx = Context.track_usage(ctx, response)
 

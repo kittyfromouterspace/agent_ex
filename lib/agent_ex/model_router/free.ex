@@ -146,7 +146,9 @@ defmodule AgentEx.ModelRouter.Free do
   def handle_info(:refresh, state) do
     if state.refresh_timer, do: Process.cancel_timer(state.refresh_timer)
 
+    refresh_start = System.monotonic_time()
     models = fetch_and_categorize()
+    refresh_duration = System.monotonic_time() - refresh_start
     timer = Process.send_after(self(), :refresh, @refresh_interval_ms)
 
     primary_ids = Enum.map(models.primary, & &1.model_id)
@@ -154,6 +156,16 @@ defmodule AgentEx.ModelRouter.Free do
 
     Logger.info(
       "AgentEx.ModelRouter.Free: refreshed. Primary: #{inspect(primary_ids)}, Lightweight: #{inspect(lightweight_ids)}"
+    )
+
+    :telemetry.execute(
+      [:agent_ex, :model_router, :refresh],
+      %{
+        duration: refresh_duration,
+        primary_count: length(primary_ids),
+        lightweight_count: length(lightweight_ids)
+      },
+      %{}
     )
 
     all_model_ids = MapSet.new(primary_ids ++ lightweight_ids)

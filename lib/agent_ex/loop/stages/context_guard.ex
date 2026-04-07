@@ -12,7 +12,10 @@ defmodule AgentEx.Loop.Stages.ContextGuard do
 
   @behaviour AgentEx.Loop.Stage
 
+  @behaviour AgentEx.Loop.Stage
+
   alias AgentEx.Loop.Context
+  alias AgentEx.Telemetry
 
   require Logger
 
@@ -38,6 +41,15 @@ defmodule AgentEx.Loop.Stages.ContextGuard do
           "ContextGuard: session #{ctx.session_id} hit cost limit ($#{Float.round(ctx.total_cost, 4)} >= $#{cost_limit})"
         )
 
+        Telemetry.event(
+          [:context, :cost_limit],
+          %{
+            cost_usd: ctx.total_cost,
+            limit_usd: cost_limit
+          },
+          %{session_id: ctx.session_id}
+        )
+
         {:done, result_with_cost_warning(ctx)}
 
       should_compact?(ctx) ->
@@ -45,7 +57,22 @@ defmodule AgentEx.Loop.Stages.ContextGuard do
           "ContextGuard: compacting context for #{ctx.session_id} (#{round(estimate_usage(ctx) * 100)}% used)"
         )
 
+        messages_before = length(ctx.messages)
+        pct_before = estimate_usage(ctx)
         ctx = compact_messages(ctx)
+        pct_after = estimate_usage(ctx)
+
+        Telemetry.event(
+          [:context, :compact],
+          %{
+            messages_before: messages_before,
+            messages_after: length(ctx.messages),
+            pct_before: pct_before,
+            pct_after: pct_after
+          },
+          %{session_id: ctx.session_id}
+        )
+
         next.(ctx)
 
       true ->

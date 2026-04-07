@@ -458,6 +458,207 @@ end
 
 ---
 
+## Telemetry & Observability
+
+AgentEx emits structured telemetry events via the standard `:telemetry` library. Every event uses the `[:agent_ex | ...]` prefix and carries typed measurements and metadata. Attach handlers to observe agent behavior in production.
+
+### Quick Setup
+
+```elixir
+# Attach a simple logger to all AgentEx events
+:telemetry.attach_many(
+  "agent-ex-logger",
+  [
+    [:agent_ex, :session, :start],
+    [:agent_ex, :session, :stop],
+    [:agent_ex, :session, :error],
+    [:agent_ex, :llm_call, :stop],
+    [:agent_ex, :tool, :stop],
+    [:agent_ex, :phase, :transition]
+  ],
+  fn name, measurements, metadata, _config ->
+    Logger.info("[telemetry] #{inspect(name)} #{inspect(measurements)} #{inspect(metadata)}")
+  end,
+  nil
+)
+```
+
+### Using the Helper Module
+
+`AgentEx.Telemetry` provides two convenience functions:
+
+```elixir
+# Emit an event directly
+AgentEx.Telemetry.event([:session, :start], %{}, %{session_id: "abc", mode: :agentic})
+
+# Wrap a function in start/stop events
+AgentEx.Telemetry.span([:pipeline, :stage, :start], [:pipeline, :stage, :stop], %{}, %{}, fn ->
+  do_work()
+end)
+```
+
+### Event Reference
+
+#### Session Lifecycle
+
+Emitted by `AgentEx.run/1` and `AgentEx.resume/1`.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :session, :start]` | Before pipeline begins | — | `session_id`, `mode`, `profile` |
+| `[:agent_ex, :session, :stop]` | After pipeline completes | `duration`, `cost`, `tokens`, `steps` | `session_id`, `mode` |
+| `[:agent_ex, :session, :error]` | Pipeline crashes | `duration` | `session_id`, `mode`, `error` |
+| `[:agent_ex, :session, :resume]` | Session resumed from transcript | — | `session_id`, `turns_restored` |
+
+#### Pipeline Stages
+
+Emitted by `AgentEx.Loop.Engine` for **every** stage in the pipeline.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :pipeline, :stage, :start]` | Before stage executes | — | `session_id`, `stage` |
+| `[:agent_ex, :pipeline, :stage, :stop]` | After stage completes | `duration` | `session_id`, `stage` |
+
+`stage` is the short module name (e.g. `"LLMCall"`, `"ModeRouter"`).
+
+#### LLM Calls
+
+Emitted by `AgentEx.Loop.Stages.LLMCall`.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :llm_call, :start]` | Before calling the LLM | — | `session_id`, `model_tier` |
+| `[:agent_ex, :llm_call, :stop]` | After LLM responds | `duration`, `input_tokens`, `output_tokens`, `cost_usd` | `session_id`, `model_tier`, `route` |
+
+`route` is the resolved model ID (e.g. `"gpt-4o"`) or `nil` if routing failed.
+
+#### Tool Execution
+
+Emitted by `AgentEx.Loop.Stages.ToolExecutor`.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :tool, :stop]` | After tool completes (success or failure) | `duration`, `output_bytes` | `session_id`, `tool_name`, `success` |
+
+`success` is `true` or `false`.
+
+#### Context Management
+
+Emitted by `AgentEx.Loop.Stages.ContextGuard`.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :context, :compact]` | Messages are compacted to save context window | `messages_before`, `messages_after`, `pct_before`, `pct_after` | `session_id` |
+| `[:agent_ex, :context, :cost_limit]` | Session hits the cost limit | `cost_usd`, `limit_usd` | `session_id` |
+
+#### Phase Transitions
+
+Emitted by `AgentEx.Loop.Phase.transition/2`.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :phase, :transition]` | Phase changes (e.g. `:plan` → `:execute`) | — | `session_id`, `mode`, `from`, `to` |
+
+#### Mode Router
+
+Emitted by `AgentEx.Loop.Stages.ModeRouter` for every routing decision.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :mode_router, :route]` | After routing decision | — | `session_id`, `mode`, `phase`, `stop_reason`, `action` |
+
+`action` is one of: `"done"`, `"next"`, `"reentry"`.
+
+#### Commitment Detection
+
+Emitted by `AgentEx.Loop.Stages.CommitmentGate`.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :commitment, :detected]` | Agent made a commitment but didn't act | `continuations` | `session_id` |
+
+`continuations` is the total number of commitment continuations so far (max 2 before giving up).
+
+#### Plan Tracking
+
+Emitted by `AgentEx.Loop.Stages.PlanTracker` in `:agentic_planned` mode.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :plan, :created]` | Plan is parsed from LLM output | `step_count` | `session_id` |
+| `[:agent_ex, :plan, :step, :complete]` | A single plan step is marked complete | — | `session_id`, `step_index`, `total_steps` |
+| `[:agent_ex, :plan, :all_complete]` | All plan steps are done | — | `session_id`, `total_steps` |
+
+#### Circuit Breaker
+
+Emitted by `AgentEx.CircuitBreaker` for per-tool failure tracking.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :circuit_breaker, :trip]` | Tool failures exceed threshold (circuit opens) | `failure_count` | `tool_name` |
+| `[:agent_ex, :circuit_breaker, :recover]` | Tool succeeds after half-open test (circuit closes) | — | `tool_name` |
+
+#### Model Router
+
+Emitted by `AgentEx.ModelRouter.Free` during periodic catalog refreshes.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :model_router, :refresh]` | Free model catalog refreshed from OpenRouter | `duration`, `primary_count`, `lightweight_count` | — |
+
+#### Memory System
+
+Emitted by `AgentEx.Memory.ContextKeeper` and `AgentEx.Memory.MemoryManager`.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :memory, :ingest]` | Facts are ingested into working memory | `fact_count` | `workspace_id` |
+| `[:agent_ex, :memory, :evict]` | Oldest facts are dropped to stay under the 500-entry cap | `evicted_count`, `remaining_count` | `workspace_id` |
+| `[:agent_ex, :memory, :retrieval, :stop]` | Context retrieval completes (knowledge store + ContextKeeper) | `duration`, `context_chars`, `cache_hit` | `workspace_id`, `incremental` |
+
+#### Subagent Lifecycle
+
+Emitted by `AgentEx.Subagent.Coordinator`.
+
+| Event | When | Measurements | Metadata |
+|-------|------|-------------|----------|
+| `[:agent_ex, :subagent, :spawn]` | Subagent task starts | — | `session_id`, `parent_session_id`, `depth` |
+| `[:agent_ex, :subagent, :complete]` | Subagent finishes successfully | `duration`, `cost`, `steps` | `session_id`, `parent_session_id` |
+| `[:agent_ex, :subagent, :error]` | Subagent fails | `duration` | `session_id`, `parent_session_id`, `error` |
+
+### Typical Dashboard Metrics
+
+Wire these events into your observability stack (Telegraf, StatsD, Prometheus via `telemetry_metrics`, etc.):
+
+| Metric | Event | Aggregation |
+|--------|-------|------------|
+| Session duration p50/p99 | `[:session, :stop]` → `duration` | distribution |
+| Session cost | `[:session, :stop]` → `cost` | sum |
+| LLM latency p50/p99 | `[:llm_call, :stop]` → `duration` | distribution |
+| Token usage | `[:llm_call, :stop]` → `input_tokens` + `output_tokens` | sum |
+| Tool latency by name | `[:tool, :stop]` → `duration` (group by `tool_name`) | distribution |
+| Tool error rate | `[:tool, :stop]` where `success == false` | count |
+| Context compactions | `[:context, :compact]` | count |
+| Cost limit hits | `[:context, :cost_limit]` | count |
+| Circuit breaker trips | `[:circuit_breaker, :trip]` | count |
+| Commitment gate triggers | `[:commitment, :detected]` | count |
+| Subagent spawn rate | `[:subagent, :spawn]` | count |
+| Plan step throughput | `[:plan, :step, :complete]` | count |
+
+### Attaching with Telemetry.Metrics
+
+```elixir
+# In your application supervisor children:
+{Telemetry.Metrics.ConsoleReporter, metrics: AgentEx.Telemetry.metrics()}
+
+# Or define metrics manually:
+Telemetry.Metrics.summary([:agent_ex, :llm_call, :stop], :duration, unit: {:native, :millisecond})
+Telemetry.Metrics.counter([:agent_ex, :tool, :stop], tags: [:tool_name, :success])
+Telemetry.Metrics.distribution([:agent_ex, :session, :stop], :duration)
+```
+
+---
+
 ## Testing
 
 Use the test helpers:
