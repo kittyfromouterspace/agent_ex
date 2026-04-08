@@ -121,7 +121,7 @@ defmodule AgentEx.Concurrency.Semaphore do
   end
 
   @impl true
-  def handle_cast({:release, pid}, state) do
+  def handle_cast({:release, _pid}, state) do
     state = do_release(state)
     {:noreply, state}
   end

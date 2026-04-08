@@ -27,7 +27,6 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   @behaviour AgentEx.Loop.Stage
 
   alias AgentEx.Loop.Context
-  alias AgentEx.Loop.Helpers
   alias AgentEx.ModelRouter
 
   require Logger
@@ -39,9 +38,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   def call(%Context{} = ctx, next) do
     tier = ctx.model_tier || :primary
 
-    Logger.debug(
-      "LLMCall: turn #{ctx.turns_used + 1}/#{ctx.config.max_turns} for #{ctx.session_id} (tier: #{tier})"
-    )
+    Logger.debug("LLMCall: turn #{ctx.turns_used + 1}/#{ctx.config.max_turns} for #{ctx.session_id} (tier: #{tier})")
 
     AgentEx.Telemetry.event([:llm_call, :start], %{}, %{
       session_id: ctx.session_id,
@@ -52,9 +49,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
     stable_hash = compute_stable_hash(stable_prefix, ctx.tools)
     prefix_changed = ctx.stable_prefix_hash != stable_hash
 
-    route = resolve_route(tier)
-
-    params = %{
+    base_params = %{
       "messages" => ctx.messages,
       "tools" => ctx.tools,
       "session_id" => ctx.session_id,
@@ -63,29 +58,13 @@ defmodule AgentEx.Loop.Stages.LLMCall do
       "cache_control" => %{
         "stable_hash" => stable_hash,
         "prefix_changed" => prefix_changed
-      },
-      "_route" => route
+      }
     }
 
     llm_chat = ctx.callbacks[:llm_chat] || fn _ -> {:error, :no_llm_adapter} end
     start_time = System.monotonic_time()
 
-    result =
-      case llm_chat.(params) do
-        {:ok, response} = ok ->
-          if route do
-            ModelRouter.report_success(route.provider_name, route.model_id)
-          end
-
-          ok
-
-        {:error, _} = err ->
-          if route do
-            ModelRouter.report_error(route.provider_name, route.model_id, classify_error(err))
-          end
-
-          err
-      end
+    {result, used_route} = try_routes_for_tier(tier, base_params, llm_chat, ctx)
 
     case result do
       {:ok, response} ->
@@ -100,7 +79,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
             output_tokens: usage["output_tokens"] || 0,
             cost_usd: response["cost"] || 0.0
           },
-          %{model_tier: tier, session_id: ctx.session_id, route: route && route.model_id}
+          %{model_tier: tier, session_id: ctx.session_id, route: used_route && used_route.model_id}
         )
 
         ctx = Context.track_usage(ctx, response)
@@ -120,43 +99,126 @@ defmodule AgentEx.Loop.Stages.LLMCall do
     end
   end
 
-  defp resolve_route(tier) do
-    case ModelRouter.resolve(tier) do
-      {:ok, route} ->
-        Logger.debug("LLMCall: resolved route #{route.model_id} (source: #{route.source})")
-        route
+  # Walk every healthy route for the tier in priority order. On success
+  # we report the route to ModelRouter and stop. On error we classify,
+  # report the failure (which puts the route in cooldown if the error
+  # threshold is hit), and try the next route. If every route fails we
+  # invoke the callback one final time WITHOUT a `_route` so the host's
+  # configured-provider fallback (if any) gets a chance.
+  defp try_routes_for_tier(tier, base_params, llm_chat, ctx) do
+    routes = resolve_routes(tier)
+    do_try_routes(routes, tier, base_params, llm_chat, ctx, nil)
+  end
 
-      {:error, reason} ->
+  defp do_try_routes([], _tier, base_params, llm_chat, _ctx, last_error) do
+    Logger.debug("LLMCall: all routes exhausted, calling callback without _route")
+    params = Map.put(base_params, "_route", nil)
+
+    case llm_chat.(params) do
+      {:ok, _response} = ok -> {ok, nil}
+      {:error, _} = err -> {err, nil}
+      _ -> {last_error || {:error, :no_routes_available}, nil}
+    end
+  end
+
+  defp do_try_routes([route | rest], tier, base_params, llm_chat, ctx, _last) do
+    Logger.debug("LLMCall: trying route #{route.provider_name}/#{route.model_id} (source: #{route.source})")
+
+    Context.emit_event(
+      ctx,
+      {:model_selected,
+       %{
+         tier: tier,
+         model_id: route.model_id,
+         provider_name: route.provider_name,
+         source: route.source,
+         label: Map.get(route, :label, route.model_id)
+       }}
+    )
+
+    params = Map.put(base_params, "_route", route)
+
+    case llm_chat.(params) do
+      {:ok, _response} = ok ->
+        ModelRouter.report_success(route.provider_name, route.model_id)
+        {ok, route}
+
+      {:error, _reason} = err ->
+        failure = classify_error(err)
+        retry_after_ms = extract_retry_after(err)
+
         Logger.warning(
-          "LLMCall: route resolution failed: #{inspect(reason)}, proceeding without route"
+          "LLMCall: route #{route.provider_name}/#{route.model_id} failed (#{failure}, retry_after_ms=#{inspect(retry_after_ms)}); trying next"
         )
 
-        nil
+        opts = if is_integer(retry_after_ms), do: [retry_after_ms: retry_after_ms], else: []
+        ModelRouter.report_error(route.provider_name, route.model_id, failure, opts)
+        do_try_routes(rest, tier, base_params, llm_chat, ctx, err)
+    end
+  end
+
+  defp resolve_routes(tier) do
+    case ModelRouter.resolve_all(tier) do
+      {:ok, routes} when is_list(routes) ->
+        Logger.debug("LLMCall: resolved #{length(routes)} routes for tier #{tier}")
+        routes
+
+      other ->
+        Logger.warning("LLMCall: resolve_all returned #{inspect(other)}, proceeding without routes")
+        []
     end
   rescue
     e ->
       Logger.warning("LLMCall: route resolution crashed: #{Exception.message(e)}")
-      nil
+      []
   end
 
-  defp classify_error({:error, reason}) do
-    reason_str = to_string(reason)
+  # Phase 2: errors carry a structured classification from the
+  # ErrorClassifier. We map to the ModelRouter failure-type vocabulary.
+  # Legacy string/integer-status shapes still handled as fallback.
+  defp classify_error({:error, %{classification: classification}}),
+    do: legacy_failure(classification)
 
+  defp classify_error({:error, %{status: 429}}), do: :rate_limit
+  defp classify_error({:error, %{status: status}}) when status in [401, 403], do: :auth_error
+  defp classify_error({:error, %{status: status}}) when is_integer(status) and status >= 500, do: :other
+  defp classify_error({:error, %{message: msg}}) when is_binary(msg), do: classify_error({:error, msg})
+
+  defp classify_error({:error, reason}) when is_binary(reason) do
     cond do
-      String.contains?(reason_str, "rate") or String.contains?(reason_str, "429") ->
+      String.contains?(reason, "rate") or String.contains?(reason, "429") ->
         :rate_limit
 
-      String.contains?(reason_str, "401") or String.contains?(reason_str, "403") or
-          String.contains?(reason_str, "unauthorized") ->
+      String.contains?(reason, "401") or String.contains?(reason, "403") or
+          String.contains?(reason, "unauthorized") ->
         :auth_error
 
-      String.contains?(reason_str, "connection") or String.contains?(reason_str, "timeout") ->
+      String.contains?(reason, "connection") or String.contains?(reason, "timeout") ->
         :connection_error
 
       true ->
         :other
     end
   end
+
+  defp classify_error(_), do: :other
+
+  defp legacy_failure(:rate_limit), do: :rate_limit
+  defp legacy_failure(:overloaded), do: :rate_limit
+  defp legacy_failure(:auth), do: :auth_error
+  defp legacy_failure(:auth_permanent), do: :auth_error
+  defp legacy_failure(:billing), do: :auth_error
+  defp legacy_failure(:timeout), do: :connection_error
+  defp legacy_failure(:transient), do: :connection_error
+  defp legacy_failure(:permanent), do: :other
+  defp legacy_failure(:format), do: :other
+  defp legacy_failure(:model_not_found), do: :other
+  defp legacy_failure(:context_overflow), do: :other
+  defp legacy_failure(:session_expired), do: :auth_error
+  defp legacy_failure(_), do: :other
+
+  defp extract_retry_after({:error, %{retry_after_ms: ms}}) when is_integer(ms) and ms > 0, do: ms
+  defp extract_retry_after(_), do: nil
 
   defp split_messages(messages) do
     case messages do

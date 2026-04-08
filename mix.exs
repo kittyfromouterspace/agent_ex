@@ -6,10 +6,16 @@ defmodule AgentEx.MixProject do
       app: :agent_ex,
       version: "0.1.0",
       elixir: "~> 1.19",
+      description: "A composable AI agent runtime",
+      package: [
+        licenses: ["BSD-3-Clause"],
+        links: %{"GitHub" => "https://github.com/kittyfromouterspace/agent_ex"}
+      ],
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      dialyzer: [ignore_warnings: ".dialyzer_ignore.exs"]
     ]
   end
 
@@ -29,10 +35,14 @@ defmodule AgentEx.MixProject do
       {:jason, "~> 1.2"},
       {:yaml_elixir, "~> 2.9"},
       {:req, "~> 0.5"},
+      {:nimble_options, "~> 1.1"},
       {:mneme, github: "kittyfromouterspace/mneme"},
       {:ecto_sql, "~> 3.12"},
       {:postgrex, "~> 0.19"},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:ex_check, "~> 0.16", only: [:dev], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:doctor, "~> 0.22", only: [:dev], runtime: false}
     ]
   end
 

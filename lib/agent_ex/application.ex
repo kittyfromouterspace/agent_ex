@@ -9,6 +9,7 @@ defmodule AgentEx.Application do
       {Registry, keys: :unique, name: AgentEx.Memory.ContextKeeperRegistry},
       {Registry, keys: :unique, name: AgentEx.Subagent.Registry},
       AgentEx.Subagent.CoordinatorSupervisor,
+      AgentEx.LLM.ProviderRegistry,
       AgentEx.ModelRouter,
       AgentEx.ModelRouter.Free
     ]

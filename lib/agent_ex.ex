@@ -230,7 +230,7 @@ defmodule AgentEx do
         workspace_id = Keyword.get(opts, :workspace_id)
         cost_limit = Keyword.get(opts, :cost_limit, 5.0)
 
-        system_prompt =
+        _system_prompt =
           Keyword.get_lazy(opts, :system_prompt, fn ->
             "You are a helpful AI assistant working in #{workspace}."
           end)

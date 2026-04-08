@@ -12,8 +12,6 @@ defmodule AgentEx.Loop.Stages.ContextGuard do
 
   @behaviour AgentEx.Loop.Stage
 
-  @behaviour AgentEx.Loop.Stage
-
   alias AgentEx.Loop.Context
   alias AgentEx.Telemetry
 

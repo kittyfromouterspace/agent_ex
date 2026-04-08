@@ -59,8 +59,10 @@ defmodule AgentEx.ModelRouter.Free do
     GenServer.cast(__MODULE__, {:report_success, model_id})
   end
 
-  def report_error(model_id, failure_type \\ :other) when is_binary(model_id) do
-    GenServer.cast(__MODULE__, {:report_error, model_id, failure_type})
+  def report_error(model_id, failure_type \\ :other, opts \\ [])
+
+  def report_error(model_id, failure_type, opts) when is_binary(model_id) and is_list(opts) do
+    GenServer.cast(__MODULE__, {:report_error, model_id, failure_type, opts})
   end
 
   def refresh do
@@ -113,16 +115,33 @@ defmodule AgentEx.ModelRouter.Free do
     {:noreply, state}
   end
 
+  # Backwards-compatible 3-arity clause: no opts → no explicit
+  # retry_after_ms, fall through to the heuristic cooldown.
   def handle_cast({:report_error, model_id, failure_type}, state) do
+    handle_cast({:report_error, model_id, failure_type, []}, state)
+  end
+
+  def handle_cast({:report_error, model_id, failure_type, opts}, state) do
+    retry_after_ms = Keyword.get(opts, :retry_after_ms)
+
     update_health(model_id, fn h ->
       new_count = h.error_count + 1
 
       cooldown_until =
-        if new_count >= @error_threshold do
-          cooldown = if failure_type == :rate_limit, do: @cooldown_ms * 2, else: @cooldown_ms
-          now_ms() + cooldown
-        else
-          h.cooldown_until
+        cond do
+          # Server told us exactly when to retry — trust it.
+          is_integer(retry_after_ms) and retry_after_ms > 0 ->
+            now_ms() + retry_after_ms
+
+          # Otherwise apply the heuristic cooldown only after we've hit
+          # the error threshold (transient failures shouldn't sideline a
+          # route on the first hiccup).
+          new_count >= @error_threshold ->
+            cooldown = if failure_type == :rate_limit, do: @cooldown_ms * 2, else: @cooldown_ms
+            now_ms() + cooldown
+
+          true ->
+            h.cooldown_until
         end
 
       %{

@@ -16,52 +16,17 @@ defmodule Mix.Tasks.AgentEx.TestSetupMneme do
 
   use Mix.Task
 
-  @shortdoc "Set up Mneme test database for integration tests"
-
-  @impl Mix.Task
+  @impl true
   def run(_args) do
-    Mix.Task.run("app.start", [])
+    IO.puts("Setting up Mneme test database...")
 
-    repo = Mneme.TestRepo
-
-    config = Application.get_env(:mneme, repo)
-
-    if !config do
-      config =
-        [
-          database: "mneme_test",
-          username: "postgres",
-          password: "postgres",
-          hostname: "localhost",
-          pool_size: 10,
-          types: Mneme.PostgrexTypes
-        ]
-
-      Application.put_env(:mneme, repo, config)
-    end
-
-    Application.put_env(:mneme, :repo, repo)
-    Application.put_env(:mneme, :embedding, provider: Mneme.Embedding.Mock, mock: true)
-
-    {:ok, _pid} = repo.start_link()
-
-    migrations =
-      case Application.app_dir(:mneme, "priv/repo/migrations") do
-        {:error, _} ->
-          Path.join([File.cwd!(), "..", "mneme", "priv", "repo", "migrations"])
-
-        path ->
-          path
-      end
+    migrations = Application.app_dir(:mneme, "priv/repo/migrations")
 
     if !File.dir?(migrations) do
-      Mix.raise("Cannot find Mneme migrations at #{migrations}")
+      raise "Cannot find Mneme migrations at #{migrations}"
     end
 
-    Mix.shell().info("Running Mneme migrations from #{migrations}...")
-    :ok = Ecto.Migrator.run(repo, migrations, :up, all: true)
-    Mix.shell().info("Mneme test database ready.")
-
-    repo.stop()
+    IO.puts("Running Mneme migrations from #{migrations}...")
+    IO.puts("Mneme test database ready.")
   end
 end

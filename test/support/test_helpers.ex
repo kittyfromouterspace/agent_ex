@@ -15,7 +15,7 @@ defmodule AgentEx.TestHelpers do
     {:ok,
      %{
        "content" => [%{"type" => "text", "text" => "Hello! I'm here to help."}],
-       "stop_reason" => "end_turn",
+       "stop_reason" => :end_turn,
        "usage" => %{"input_tokens" => 100, "output_tokens" => 50},
        "cost" => 0.001
      }}
@@ -33,7 +33,7 @@ defmodule AgentEx.TestHelpers do
            "input" => %{"path" => "test.txt"}
          }
        ],
-       "stop_reason" => "tool_use",
+       "stop_reason" => :tool_use,
        "usage" => %{"input_tokens" => 100, "output_tokens" => 80},
        "cost" => 0.002
      }}
@@ -115,7 +115,7 @@ defmodule AgentEx.TestHelpers do
       {:ok,
        %{
          "content" => [%{"type" => "text", "text" => text}],
-         "stop_reason" => "end_turn",
+         "stop_reason" => :end_turn,
          "usage" => %{"input_tokens" => 100, "output_tokens" => 80},
          "cost" => 0.002
        }}

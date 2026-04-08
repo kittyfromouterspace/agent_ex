@@ -50,9 +50,17 @@ defmodule AgentEx.ModelRouter do
     GenServer.cast(__MODULE__, {:report_success, provider_name, model_id})
   end
 
-  @doc "Report a failed call for a route."
-  def report_error(provider_name, model_id, failure_type \\ :other) do
-    GenServer.cast(__MODULE__, {:report_error, provider_name, model_id, failure_type})
+  @doc """
+  Report a failed call for a route.
+
+  `opts` may include:
+    * `:retry_after_ms` — explicit cooldown duration in milliseconds.
+      When set, the route is parked for exactly this long, regardless
+      of the heuristic error-threshold cooldown. Use this to honor a
+      server-supplied `Retry-After` header.
+  """
+  def report_error(provider_name, model_id, failure_type \\ :other, opts \\ []) do
+    GenServer.cast(__MODULE__, {:report_error, provider_name, model_id, failure_type, opts})
   end
 
   @doc "Force refresh of free model catalog."
@@ -120,7 +128,7 @@ defmodule AgentEx.ModelRouter do
     normalized =
       Enum.map(routes, fn r ->
         %{
-          id: r[:id] || r["id"] || UUID.uuid4(),
+          id: r[:id] || r["id"] || Ecto.UUID.generate(),
           provider_name: r[:provider_name] || r["provider_name"] || "unknown",
           model_id: r[:model_id] || r["model_id"],
           label: r[:label] || r["label"] || r[:model_id] || "Unknown",
@@ -140,20 +148,34 @@ defmodule AgentEx.ModelRouter do
     {:noreply, %{state | configured_routes: %{}}}
   end
 
-  def handle_cast({:report_success, provider_name, model_id}, state) do
+  def handle_cast({:report_success, _provider_name, model_id}, state) do
     Free.report_success(model_id)
     {:noreply, state}
   end
 
+  # Backwards-compatible 4-arg clause: callers that haven't updated to
+  # the new opts list still work, just without retry_after_ms.
   def handle_cast({:report_error, provider_name, model_id, failure_type}, state) do
-    Free.report_error(model_id, failure_type)
+    handle_cast({:report_error, provider_name, model_id, failure_type, []}, state)
+  end
+
+  def handle_cast({:report_error, _provider_name, model_id, failure_type, opts}, state) do
+    Free.report_error(model_id, failure_type, opts)
     {:noreply, state}
   end
 
   defp all_routes_for_tier(tier, state) do
     effective_tier = if tier == :any, do: :lightweight, else: tier
 
-    free = Free.free_routes(effective_tier)
+    # Both free and configured routes go through resolve/1 which rejects
+    # routes whose :status is :unhealthy, so every route must carry that
+    # key. Free.free_routes/1 already filters out unhealthy free routes
+    # via its own ETS-backed cooldown table, so any free route that
+    # makes it here is by definition healthy.
+    free =
+      effective_tier
+      |> Free.free_routes()
+      |> Enum.map(&Map.put(&1, :status, :healthy))
 
     configured =
       state.configured_routes

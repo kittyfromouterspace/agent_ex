@@ -48,7 +48,7 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorder do
       type: "llm_response",
       turn: turn,
       data: %{
-        stop_reason: response["stop_reason"],
+        stop_reason: stringify_stop_reason(response["stop_reason"] || response[:stop_reason]),
         usage: response["usage"],
         cost: response["cost"],
         content_preview: text_preview(response["content"])
@@ -84,4 +84,8 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorder do
   end
 
   defp text_preview(_), do: nil
+
+  defp stringify_stop_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
+  defp stringify_stop_reason(reason) when is_binary(reason), do: reason
+  defp stringify_stop_reason(_), do: "unknown"
 end

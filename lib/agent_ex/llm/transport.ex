@@ -1,0 +1,75 @@
+defmodule AgentEx.LLM.Transport do
+  @moduledoc """
+  Behaviour describing one wire-protocol family used to talk to LLM
+  providers. A transport is **pure**: it knows how to translate a
+  canonical request shape into an HTTP request and how to parse the
+  HTTP response back into the shared `AgentEx.LLM.Response` /
+  `AgentEx.LLM.Error` structs. It does not perform any network I/O,
+  does not look up credentials, and does not implement any
+  provider-specific business logic.
+
+  ## Canonical chat params
+
+  Every transport accepts the same canonical chat params map. The
+  per-provider shim is responsible for translating its own input shape
+  into this canonical form before calling
+  `c:build_chat_request/2`.
+
+      %{
+        model: String.t(),
+        messages: [%{role: String.t() | atom(), content: term()}],
+        system: nil | String.t() | [map()],
+        tools: [%{name: ..., description: ..., input_schema: ...}],
+        max_tokens: pos_integer() | nil,
+        temperature: float() | nil,
+        tool_choice: nil | :auto | :none | :any | %{name: String.t()}
+      }
+
+  Transports MUST tolerate missing optional keys (`tools`, `system`,
+  `tool_choice`, `temperature`) by treating them as absent.
+
+  ## Opts
+
+  `c:build_chat_request/2` receives an `opts` keyword list whose keys
+  are intentionally narrow:
+
+    * `:base_url`      — required, fully-qualified provider base URL
+                          (no trailing slash needed)
+    * `:api_key`       — required, raw bearer / api key value
+    * `:extra_headers` — optional, list of extra `{name, value}` tuples
+                          for provider-specific headers (e.g.
+                          `HTTP-Referer`, `anthropic-version`)
+
+  Phase 2 will move credential lookup behind a Provider behaviour and
+  the shim/`opts[:api_key]` plumbing will go away. For Phase 1 the
+  shim still hands the api key in directly.
+  """
+
+  alias AgentEx.LLM.{Error, RateLimit, Response}
+
+  @type canonical_params :: %{
+          required(:model) => String.t(),
+          required(:messages) => list(),
+          optional(:system) => String.t() | list() | nil,
+          optional(:tools) => list(),
+          optional(:max_tokens) => pos_integer() | nil,
+          optional(:temperature) => float() | nil,
+          optional(:tool_choice) => term()
+        }
+
+  @type request :: %{
+          method: :post,
+          url: String.t(),
+          body: map(),
+          headers: [{String.t(), String.t()}]
+        }
+
+  @callback id() :: atom()
+
+  @callback build_chat_request(canonical_params(), keyword()) :: request()
+
+  @callback parse_chat_response(non_neg_integer(), term(), term()) ::
+              {:ok, Response.t()} | {:error, Error.t()}
+
+  @callback parse_rate_limit(term()) :: RateLimit.t() | nil
+end
