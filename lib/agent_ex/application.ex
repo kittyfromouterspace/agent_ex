@@ -10,6 +10,7 @@ defmodule AgentEx.Application do
       {Registry, keys: :unique, name: AgentEx.Subagent.Registry},
       AgentEx.Subagent.CoordinatorSupervisor,
       AgentEx.LLM.ProviderRegistry,
+      AgentEx.LLM.Catalog,
       AgentEx.ModelRouter,
       AgentEx.ModelRouter.Free
     ]

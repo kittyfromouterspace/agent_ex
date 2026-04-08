@@ -91,6 +91,10 @@ defmodule AgentEx do
       Enum.each(model_routes, fn {tier, routes} ->
         ModelRouter.set_routes(tier, routes)
       end)
+    else
+      if tier_overrides = opts[:tier_overrides] do
+        ModelRouter.set_tier_overrides(tier_overrides)
+      end
     end
 
     system_prompt =
@@ -319,8 +323,8 @@ defmodule AgentEx do
 
             assistant_msg = %{"role" => "assistant", "content" => content}
 
-            {msgs ++ [assistant_msg], max(turns, event["turn"] || 0),
-             cost + (data["cost"] || 0.0), tokens + input_t + output_t, plan}
+            {msgs ++ [assistant_msg], max(turns, event["turn"] || 0), cost + (data["cost"] || 0.0),
+             tokens + input_t + output_t, plan}
 
           "tool_call" ->
             data = event["data"] || %{}
