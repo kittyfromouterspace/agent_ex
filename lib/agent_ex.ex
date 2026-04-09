@@ -64,6 +64,7 @@ defmodule AgentEx do
   - `:model_tier` — model tier for LLM calls (optional, default `:primary`)
   - `:model_selection_mode` — `:manual` or `:auto` (optional, default `:manual`)
   - `:model_preference` — `:optimize_price` or `:optimize_speed` (optional, default `:optimize_price`, only used in `:auto` mode)
+  - `:model_filter` — constrain model candidates: `:free_only` or `nil` (optional, only used in `:auto` mode)
   - `:session_id` — for telemetry and event tracking (optional)
   - `:user_id` — for API key resolution (optional)
   - `:caller` — pid to receive events (optional, defaults to self())
@@ -83,6 +84,7 @@ defmodule AgentEx do
     model_tier = Keyword.get(opts, :model_tier, :primary)
     model_selection_mode = Keyword.get(opts, :model_selection_mode, :manual)
     model_preference = Keyword.get(opts, :model_preference, :optimize_price)
+    model_filter = Keyword.get(opts, :model_filter)
     session_id = Keyword.get(opts, :session_id, generate_session_id())
     user_id = Keyword.get(opts, :user_id)
     caller = Keyword.get(opts, :caller, self())
@@ -149,6 +151,7 @@ defmodule AgentEx do
         model_tier: model_tier,
         model_selection_mode: model_selection_mode,
         model_preference: model_preference,
+        model_filter: model_filter,
         config: config,
         callbacks: callbacks
       )
@@ -237,6 +240,7 @@ defmodule AgentEx do
         model_tier = Keyword.get(opts, :model_tier, :primary)
         model_selection_mode = Keyword.get(opts, :model_selection_mode, :manual)
         model_preference = Keyword.get(opts, :model_preference, :optimize_price)
+        model_filter = Keyword.get(opts, :model_filter)
         user_id = Keyword.get(opts, :user_id)
         caller = Keyword.get(opts, :caller, self())
         workspace_id = Keyword.get(opts, :workspace_id)
@@ -281,6 +285,7 @@ defmodule AgentEx do
             model_tier: model_tier,
             model_selection_mode: model_selection_mode,
             model_preference: model_preference,
+            model_filter: model_filter,
             config: config,
             callbacks: callbacks
           )

@@ -89,10 +89,13 @@ defmodule AgentEx.ModelRouter do
           llm_chat = (ctx.callbacks || %{})[:llm_chat]
           context_summary = build_context_summary(ctx)
 
+          model_filter = Map.get(ctx, :model_filter)
+
           opts = [
             llm_chat: llm_chat,
             context_summary: context_summary,
-            session_id: session_id
+            session_id: session_id,
+            model_filter: model_filter
           ]
 
           case Selector.select(request, preference, opts) do
@@ -137,23 +140,46 @@ defmodule AgentEx.ModelRouter do
 
         :manual ->
           tier = Map.get(ctx, :model_tier, :primary)
+          model_filter = Map.get(ctx, :model_filter)
 
           case resolve_all(tier) do
             {:ok, routes} ->
-              AgentEx.Telemetry.event(
-                [:model_router, :resolve, :stop],
-                %{
-                  duration: System.monotonic_time() - start_time,
-                  route_count: length(routes)
-                },
-                %{
-                  session_id: session_id,
-                  selection_mode: :manual,
-                  tier: tier
-                }
-              )
+              routes = filter_routes(routes, model_filter)
 
-              {:ok, routes, nil}
+              if routes == [] do
+                AgentEx.Telemetry.event(
+                  [:model_router, :resolve, :stop],
+                  %{
+                    duration: System.monotonic_time() - start_time,
+                    route_count: 0
+                  },
+                  %{
+                    session_id: session_id,
+                    selection_mode: :manual,
+                    tier: tier,
+                    model_filter: model_filter,
+                    error: :no_routes_after_filter
+                  }
+                )
+
+                {:error, :no_free_models_available}
+              else
+                AgentEx.Telemetry.event(
+                  [:model_router, :resolve, :stop],
+                  %{
+                    duration: System.monotonic_time() - start_time,
+                    route_count: length(routes)
+                  },
+                  %{
+                    session_id: session_id,
+                    selection_mode: :manual,
+                    tier: tier,
+                    model_filter: model_filter
+                  }
+                )
+
+                {:ok, routes, nil}
+              end
 
             error ->
               AgentEx.Telemetry.event(
@@ -510,4 +536,13 @@ defmodule AgentEx.ModelRouter do
 
     Enum.join(parts, "\n")
   end
+
+  defp filter_routes(routes, :free_only) do
+    Enum.filter(routes, fn route ->
+      MapSet.member?(route.capabilities, :free)
+    end)
+  end
+
+  defp filter_routes(routes, nil), do: routes
+  defp filter_routes(routes, _), do: routes
 end

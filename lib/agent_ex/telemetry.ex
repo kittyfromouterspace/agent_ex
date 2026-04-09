@@ -40,8 +40,9 @@ defmodule AgentEx.Telemetry do
   | `[:agent_ex, :model_router, :analysis, :stop]` | duration | method, session_id, complexity, needs_vision, needs_audio, needs_reasoning, needs_large_context, estimated_input_tokens, required_capabilities |
   | `[:agent_ex, :model_router, :analysis, :fallback]` | — | session_id, from, to, reason |
   | `[:agent_ex, :model_router, :analysis, :parse_failure]` | — | — |
-  | `[:agent_ex, :model_router, :selection, :start]` | — | session_id, preference, request_length |
-  | `[:agent_ex, :model_router, :selection, :stop]` | duration, candidate_count, best_score | session_id, preference, complexity, selected_provider, selected_model_id, selected_label, needs_vision, needs_reasoning, needs_large_context, top3, error |
+  | `[:agent_ex, :model_router, :selection, :start]` | — | session_id, preference, request_length, model_filter |
+  | `[:agent_ex, :model_router, :selection, :stop]` | duration, candidate_count, best_score | session_id, preference, model_filter, complexity, selected_provider, selected_model_id, selected_label, needs_vision, needs_reasoning, needs_large_context, top3, error |
+  | `[:agent_ex, :model_router, :filter, :rejected]` | — | filter, reason |
   | `[:agent_ex, :memory, :ingest]` | fact_count | workspace_id |
   | `[:agent_ex, :memory, :evict]` | evicted_count, remaining_count | workspace_id |
   | `[:agent_ex, :memory, :retrieval, :stop]` | duration, context_chars, cache_hit | workspace_id, incremental |

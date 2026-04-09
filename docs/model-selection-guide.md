@@ -46,12 +46,28 @@ AgentEx.run(
 )
 ```
 
+### Free Models Only
+
+```elixir
+AgentEx.run(
+  prompt: "Write a test for the auth module",
+  workspace: "/path/to/project",
+  callbacks: %{llm_chat: &my_llm_chat/1},
+  model_selection_mode: :auto,
+  model_preference: :optimize_price,
+  model_filter: :free_only
+)
+```
+
+When `model_filter: :free_only` is set, only models with the `:free` capability are considered. If no free model is available, the run fails with `{:error, :no_free_models_available}`. Works in both `:auto` and `:manual` modes.
+
 ## Options
 
 | Option | Values | Default | Description |
 |--------|--------|---------|-------------|
 | `:model_selection_mode` | `:manual`, `:auto` | `:manual` | How models are chosen |
 | `:model_preference` | `:optimize_price`, `:optimize_speed` | `:optimize_price` | Optimization goal (auto mode only) |
+| `:model_filter` | `:free_only`, `nil` | `nil` | Hard filter on candidates. `:free_only` rejects all non-free models |
 | `:model_tier` | `:primary`, `:lightweight`, `:any` | `:primary` | Tier constraint (manual mode only) |
 
 Both options are also accepted by `AgentEx.resume/1`.
@@ -152,6 +168,20 @@ Fired when LLM-based analysis fails and falls back to heuristic.
 
 Fired when the LLM returns an unparseable analysis response.
 
+### Filter Events
+
+#### `[:agent_ex, :model_router, :filter, :rejected]`
+
+Fired when a model filter rejects all candidates.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| **Measurements** | | |
+| (none) | | |
+| **Metadata** | | |
+| `filter` | `:free_only` | Which filter was applied |
+| `reason` | `:no_free_models` | Why all candidates were rejected |
+
 ### Selection Events
 
 Emitted by `AgentEx.ModelRouter.Selector` when ranking and choosing a model.
@@ -167,6 +197,7 @@ Fired before selection begins.
 | **Metadata** | | |
 | `session_id` | `string \| nil` | Session |
 | `preference` | `:optimize_price` \| `:optimize_speed` | User preference |
+| `model_filter` | `:free_only` \| `nil` | Active model filter |
 | `request_length` | `integer` | Character count of the request |
 
 #### `[:agent_ex, :model_router, :selection, :stop]`

@@ -29,6 +29,11 @@ defmodule AgentEx.Loop.Context do
     # User preference for auto mode: :optimize_price or :optimize_speed
     model_preference: :optimize_price,
 
+    # Model filter: constrains candidate models before scoring.
+    # :free_only — only models with :free capability, error if none
+    # nil — no filter
+    model_filter: nil,
+
     # Protocol (for different agent backends)
     protocol_module: nil,
     protocol_name: :llm,
@@ -136,6 +141,7 @@ defmodule AgentEx.Loop.Context do
           model_tier: atom(),
           model_selection_mode: :manual | :auto,
           model_preference: :optimize_price | :optimize_speed,
+          model_filter: :free_only | nil,
           activation: map(),
           last_response: map() | nil,
           pending_tool_calls: list(map()),
@@ -168,6 +174,7 @@ defmodule AgentEx.Loop.Context do
       model_tier: Keyword.get(opts, :model_tier, :primary),
       model_selection_mode: Keyword.get(opts, :model_selection_mode, :manual),
       model_preference: Keyword.get(opts, :model_preference, :optimize_price),
+      model_filter: Keyword.get(opts, :model_filter),
       config: Keyword.get(opts, :config, %__MODULE__{}.config),
       callbacks: Keyword.get(opts, :callbacks, %{})
     }

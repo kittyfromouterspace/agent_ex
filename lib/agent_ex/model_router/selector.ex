@@ -29,13 +29,15 @@ defmodule AgentEx.ModelRouter.Selector do
     context_summary = Keyword.get(opts, :context_summary, "")
     session_id = Keyword.get(opts, :session_id)
     llm_chat = Keyword.get(opts, :llm_chat)
+    model_filter = Keyword.get(opts, :model_filter)
 
     start_time = System.monotonic_time()
 
     AgentEx.Telemetry.event([:model_router, :selection, :start], %{}, %{
       session_id: session_id,
       preference: preference,
-      request_length: String.length(request)
+      request_length: String.length(request),
+      model_filter: model_filter
     })
 
     result =
@@ -45,7 +47,7 @@ defmodule AgentEx.ModelRouter.Selector do
              session_id: session_id
            ) do
         {:ok, analysis} ->
-          models = fetch_candidates(analysis)
+          models = fetch_candidates(analysis, model_filter)
 
           ranked =
             models
@@ -83,6 +85,7 @@ defmodule AgentEx.ModelRouter.Selector do
                 %{
                   session_id: session_id,
                   preference: preference,
+                  model_filter: model_filter,
                   complexity: analysis.complexity,
                   selected_provider: best.provider,
                   selected_model_id: best.id,
@@ -106,6 +109,7 @@ defmodule AgentEx.ModelRouter.Selector do
                 %{
                   session_id: session_id,
                   preference: preference,
+                  model_filter: model_filter,
                   error: :no_models_available
                 }
               )
@@ -122,9 +126,10 @@ defmodule AgentEx.ModelRouter.Selector do
 
   Returns a list of `{model, score}` tuples sorted by score ascending.
   """
-  @spec rank(Analyzer.analysis(), Preference.preference()) :: [ranked_model()]
-  def rank(analysis, preference) do
-    models = fetch_candidates(analysis)
+  @spec rank(Analyzer.analysis(), Preference.preference(), keyword()) :: [ranked_model()]
+  def rank(analysis, preference, opts \\ []) do
+    model_filter = Keyword.get(opts, :model_filter)
+    models = fetch_candidates(analysis, model_filter)
 
     models
     |> Enum.map(fn model -> {model, Preference.score(model, preference, analysis)} end)
@@ -132,23 +137,46 @@ defmodule AgentEx.ModelRouter.Selector do
   end
 
   @doc "Get the top N ranked models."
-  @spec top(Analyzer.analysis(), Preference.preference(), pos_integer()) :: [ranked_model()]
-  def top(analysis, preference, n \\ 3) do
+  @spec top(Analyzer.analysis(), Preference.preference(), pos_integer(), keyword()) :: [
+          ranked_model()
+        ]
+  def top(analysis, preference, n \\ 3, opts \\ []) do
     analysis
-    |> rank(preference)
+    |> rank(preference, opts)
     |> Enum.take(n)
   end
 
-  defp fetch_candidates(analysis) do
+  defp fetch_candidates(analysis, model_filter) do
     required = analysis.required_capabilities || [:chat]
 
     base = Catalog.find(has: required)
 
-    if analysis.needs_vision do
-      base
-    else
-      base ++ Catalog.find(has: [:chat])
-    end
-    |> Enum.uniq_by(fn m -> {m.provider, m.id} end)
+    candidates =
+      if analysis.needs_vision do
+        base
+      else
+        base ++ Catalog.find(has: [:chat])
+      end
+      |> Enum.uniq_by(fn m -> {m.provider, m.id} end)
+
+    apply_filter(candidates, model_filter)
   end
+
+  defp apply_filter(models, :free_only) do
+    free = Enum.filter(models, &MapSet.member?(&1.capabilities, :free))
+
+    if free == [] do
+      Logger.warning("ModelRouter.Selector: :free_only filter set but no free models available")
+
+      AgentEx.Telemetry.event([:model_router, :filter, :rejected], %{}, %{
+        filter: :free_only,
+        reason: :no_free_models
+      })
+    end
+
+    free
+  end
+
+  defp apply_filter(models, nil), do: models
+  defp apply_filter(models, _), do: models
 end
