@@ -162,10 +162,10 @@ defmodule AgentEx.Loop.Stages.HumanCheckpointTest do
         )
         |> Map.put(:accumulated_text, "Let me check.")
         |> Map.put(:pending_tool_calls, [])
-        |> Map.put(:last_response, %{
-          "content" => [
-            %{"type" => "text", "text" => "Let me check."},
-            %{"type" => "tool_use", "id" => "c1", "name" => "read_file", "input" => %{}}
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [
+            %{type: :text, text: "Let me check."},
+            %{type: :tool_use, id: "c1", name: "read_file", input: %{}}
           ]
         })
 

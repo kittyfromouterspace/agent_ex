@@ -13,29 +13,29 @@ defmodule AgentEx.TestHelpers do
 
   def mock_llm_end_turn(_params) do
     {:ok,
-     %{
-       "content" => [%{"type" => "text", "text" => "Hello! I'm here to help."}],
-       "stop_reason" => :end_turn,
-       "usage" => %{"input_tokens" => 100, "output_tokens" => 50},
-       "cost" => 0.001
+     %AgentEx.LLM.Response{
+       content: [%{type: :text, text: "Hello! I'm here to help."}],
+       stop_reason: :end_turn,
+       usage: %{input_tokens: 100, output_tokens: 50, cache_read: 0, cache_write: 0},
+       cost: 0.001
      }}
   end
 
   def mock_llm_tool_use(_params) do
     {:ok,
-     %{
-       "content" => [
-         %{"type" => "text", "text" => "Let me check that file."},
+     %AgentEx.LLM.Response{
+       content: [
+         %{type: :text, text: "Let me check that file."},
          %{
-           "type" => "tool_use",
-           "id" => "call_1",
-           "name" => "read_file",
-           "input" => %{"path" => "test.txt"}
+           type: :tool_use,
+           id: "call_1",
+           name: "read_file",
+           input: %{"path" => "test.txt"}
          }
        ],
-       "stop_reason" => :tool_use,
-       "usage" => %{"input_tokens" => 100, "output_tokens" => 80},
-       "cost" => 0.002
+       stop_reason: :tool_use,
+       usage: %{input_tokens: 100, output_tokens: 80, cache_read: 0, cache_write: 0},
+       cost: 0.002
      }}
   end
 
@@ -113,11 +113,11 @@ defmodule AgentEx.TestHelpers do
         end)
 
       {:ok,
-       %{
-         "content" => [%{"type" => "text", "text" => text}],
-         "stop_reason" => :end_turn,
-         "usage" => %{"input_tokens" => 100, "output_tokens" => 80},
-         "cost" => 0.002
+       %AgentEx.LLM.Response{
+         content: [%{type: :text, text: text}],
+         stop_reason: :end_turn,
+         usage: %{input_tokens: 100, output_tokens: 80, cache_read: 0, cache_write: 0},
+         cost: 0.002
        }}
     end
   end

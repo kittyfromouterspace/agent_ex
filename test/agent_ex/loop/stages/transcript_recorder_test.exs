@@ -15,11 +15,11 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorderTest do
     end
 
     test "records llm_response event when backend is configured", %{workspace: workspace} do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "Hello!"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{"input_tokens" => 100, "output_tokens" => 50},
-        "cost" => 0.002
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "Hello!"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 100, output_tokens: 50, cache_read: 0, cache_write: 0},
+        cost: 0.002
       }
 
       ctx =
@@ -49,19 +49,19 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorderTest do
     end
 
     test "records tool_call events for pending tool calls", %{workspace: workspace} do
-      response = %{
-        "content" => [
-          %{"type" => "text", "text" => "Checking file."},
+      response = %AgentEx.LLM.Response{
+        content: [
+          %{type: :text, text: "Checking file."},
           %{
-            "type" => "tool_use",
-            "id" => "call_1",
-            "name" => "read_file",
-            "input" => %{"path" => "a.txt"}
+            type: :tool_use,
+            id: "call_1",
+            name: "read_file",
+            input: %{"path" => "a.txt"}
           }
         ],
-        "stop_reason" => "tool_use",
-        "usage" => %{},
-        "cost" => 0.0
+        stop_reason: :tool_use,
+        usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       ctx =
@@ -90,11 +90,11 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorderTest do
     end
 
     test "is no-op when no transcript_backend callback" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "ok"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{},
-        "cost" => 0.0
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "ok"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       ctx = build_ctx()
@@ -112,11 +112,11 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorderTest do
     end
 
     test "is no-op when workspace is missing" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "ok"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{},
-        "cost" => 0.0
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "ok"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       ctx =

@@ -165,13 +165,16 @@ defmodule AgentEx.Loop.Stages.CLIExecutor do
     cost = estimate_cli_cost(profile_config, metadata)
 
     # Build response map similar to LLM response format
-    response_map = %{
-      "content" => content,
-      "tool_calls" => tool_calls,
-      "usage" => usage,
-      "stop_reason" => metadata[:stop_reason] || "end_turn",
-      "cost" => cost,
-      "metadata" => metadata
+    response_map = %AgentEx.LLM.Response{
+      content: format_cli_content(content),
+      stop_reason: metadata[:stop_reason] || :end_turn,
+      usage: %{
+        input_tokens: usage[:input_tokens] || 0,
+        output_tokens: usage[:output_tokens] || 0,
+        cache_read: 0,
+        cache_write: 0
+      },
+      cost: cost
     }
 
     %{
@@ -180,10 +183,34 @@ defmodule AgentEx.Loop.Stages.CLIExecutor do
         pending_tool_calls: tool_calls,
         accumulated_text: ctx.accumulated_text <> content,
         total_cost: ctx.total_cost + cost,
-        total_tokens:
-          ctx.total_tokens + (usage[:input_tokens] || 0) + (usage[:output_tokens] || 0)
+        total_tokens: ctx.total_tokens + (usage[:input_tokens] || 0) + (usage[:output_tokens] || 0)
     }
   end
+
+  defp format_cli_content(content) when is_binary(content) do
+    [%{type: :text, text: content}]
+  end
+
+  defp format_cli_content(content) when is_list(content) do
+    Enum.map(content, fn
+      %{"type" => "text", "text" => text} ->
+        %{type: :text, text: text}
+
+      %{"type" => "tool_use", "id" => id, "name" => name, "input" => input} ->
+        %{type: :tool_use, id: id, name: name, input: input}
+
+      %{type: :text, text: text} ->
+        %{type: :text, text: text}
+
+      %{type: :tool_use, id: id, name: name, input: input} ->
+        %{type: :tool_use, id: id, name: name, input: input}
+
+      other ->
+        other
+    end)
+  end
+
+  defp format_cli_content(_), do: []
 
   # --- Cost estimation for subscription agents ---
 

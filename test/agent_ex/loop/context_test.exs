@@ -50,18 +50,18 @@ defmodule AgentEx.Loop.ContextTest do
     test "accumulates cost and tokens" do
       ctx = Context.new([])
 
-      resp1 = %{
-        "cost" => 0.001,
-        "usage" => %{"input_tokens" => 100, "output_tokens" => 50}
+      resp1 = %AgentEx.LLM.Response{
+        cost: 0.001,
+        usage: %{input_tokens: 100, output_tokens: 50, cache_read: 0, cache_write: 0}
       }
 
       ctx = Context.track_usage(ctx, resp1)
       assert ctx.total_cost == 0.001
       assert ctx.total_tokens == 150
 
-      resp2 = %{
-        "cost" => 0.002,
-        "usage" => %{"input_tokens" => 200, "output_tokens" => 100}
+      resp2 = %AgentEx.LLM.Response{
+        cost: 0.002,
+        usage: %{input_tokens: 200, output_tokens: 100, cache_read: 0, cache_write: 0}
       }
 
       ctx = Context.track_usage(ctx, resp2)
@@ -71,7 +71,8 @@ defmodule AgentEx.Loop.ContextTest do
 
     test "handles missing cost and usage gracefully" do
       ctx = Context.new([])
-      ctx = Context.track_usage(ctx, %{})
+
+      ctx = Context.track_usage(ctx, %AgentEx.LLM.Response{})
       assert ctx.total_cost == 0.0
       assert ctx.total_tokens == 0
     end

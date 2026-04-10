@@ -55,18 +55,20 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
         fn name, _input, ctx -> {:error, "No tool handler for #{name}", ctx} end
 
     Enum.map_reduce(tool_calls, ctx, fn call, ctx ->
-      name = call["name"]
+      name = call[:name] || call["name"]
+      tool_id = call[:id] || call["id"]
+      input = call[:input] || call["input"]
       workspace_id = ctx.metadata[:workspace_id]
       Context.emit_event(ctx, {:tool_use, name, workspace_id})
-      input_summary = inspect(call["input"], limit: 200, printable_limit: 200)
+      input_summary = inspect(input, limit: 200, printable_limit: 200)
       Logger.info("ToolExecutor: #{name} #{input_summary}")
 
       tool_start_time = System.monotonic_time()
 
       {result, is_error, ctx} =
-        case check_permission(name, call["input"], ctx) do
+        case check_permission(name, input, ctx) do
           :approved ->
-            execute_with_circuit_breaker(name, call["input"], ctx, execute_tool)
+            execute_with_circuit_breaker(name, input, ctx, execute_tool)
 
           {:approved_with_changes, new_input} ->
             execute_with_circuit_breaker(name, new_input, ctx, execute_tool)
@@ -90,7 +92,7 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
 
       Context.emit_event(
         ctx,
-        {:tool_trace, name, call["input"], trace_output, is_error, workspace_id}
+        {:tool_trace, name, input, trace_output, is_error, workspace_id}
       )
 
       tool_duration = System.monotonic_time() - tool_start_time
@@ -115,14 +117,14 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
 
       ctx =
         if name == "read_file" and not is_error do
-          path = call["input"]["path"] || call["input"]["file"]
+          path = input["path"] || input["file"]
           track_file_read(ctx, path)
         else
           ctx
         end
 
       {%{
-         "tool_use_id" => call["id"],
+         "tool_use_id" => tool_id,
          "content" => content,
          "is_error" => is_error
        }, ctx}
@@ -155,8 +157,7 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
       {:error, :circuit_open} ->
         Logger.warning("CircuitBreaker: #{name} is open, skipping execution")
 
-        {"Tool temporarily unavailable (repeated failures). Try a different approach or wait a few minutes.",
-         true, ctx}
+        {"Tool temporarily unavailable (repeated failures). Try a different approach or wait a few minutes.", true, ctx}
 
       :ok ->
         try do

@@ -102,12 +102,12 @@ defmodule AgentEx.ModelRouter.Analyzer do
 
     case llm_chat.(params) do
       {:ok, response} ->
-        content = response["content"] || []
+        content = response.content || []
 
         text =
           content
-          |> Enum.filter(&(&1["type"] == "text"))
-          |> Enum.map_join(& &1["text"])
+          |> Enum.filter(&(&1.type == :text))
+          |> Enum.map_join(& &1.text)
           |> String.trim()
 
         parse_analysis(text)

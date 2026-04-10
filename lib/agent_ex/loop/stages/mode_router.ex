@@ -40,22 +40,12 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
 
   @impl true
   def call(%Context{} = ctx, next) do
-    response = ctx.last_response || %{}
-    stop_reason = normalize_stop_reason(response["stop_reason"] || response[:stop_reason])
-    content = response["content"] || response[:content]
+    response = ctx.last_response || %AgentEx.LLM.Response{}
+    stop_reason = response.stop_reason
+    content = response.content
 
     route(ctx, next, stop_reason, content)
   end
-
-  defp normalize_stop_reason(:end_turn), do: :end_turn
-  defp normalize_stop_reason(:tool_use), do: :tool_use
-  defp normalize_stop_reason(:max_tokens), do: :max_tokens
-  defp normalize_stop_reason("end_turn"), do: :end_turn
-  defp normalize_stop_reason("tool_use"), do: :tool_use
-  defp normalize_stop_reason("max_tokens"), do: :max_tokens
-  defp normalize_stop_reason("stop"), do: :end_turn
-  defp normalize_stop_reason("stop_sequence"), do: :end_turn
-  defp normalize_stop_reason(other), do: other
 
   # --- max_tokens: always return what we have ---
   defp route(ctx, _next, :max_tokens, content) do
@@ -209,15 +199,13 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     maybe_run_callback(ctx.callbacks[:on_response_facts], ctx, text)
 
     tool_calls = Helpers.extract_tool_calls(content)
-    tool_names = Enum.map(tool_calls, & &1["name"])
+    tool_names = Enum.map(tool_calls, & &1.name)
     assistant_msg = %{"role" => "assistant", "content" => content}
 
     ctx = %{ctx | messages: ctx.messages ++ [assistant_msg]}
 
     if text != "" do
-      Logger.info(
-        "AgentReasoning: #{String.slice(text, 0, 500)} -> tools: #{inspect(tool_names)}"
-      )
+      Logger.info("AgentReasoning: #{String.slice(text, 0, 500)} -> tools: #{inspect(tool_names)}")
 
       workspace_id = ctx.metadata[:workspace_id]
       Context.emit_event(ctx, {:agent_reasoning, text, tool_names, workspace_id})
@@ -229,9 +217,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     ctx = %{ctx | pending_tool_calls: tool_calls}
 
     if ctx.turns_used >= ctx.config.max_turns do
-      Logger.warning(
-        "ModeRouter: max_turns (#{ctx.config.max_turns}) reached for #{ctx.session_id}"
-      )
+      Logger.warning("ModeRouter: max_turns (#{ctx.config.max_turns}) reached for #{ctx.session_id}")
 
       {:done, Helpers.result_from_context(ctx)}
     else

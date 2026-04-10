@@ -12,7 +12,7 @@ defmodule AgentEx.ModelRouterTest do
           model_tier: :primary,
           model_selection_mode: :manual,
           callbacks: %{
-            llm_chat: fn _ -> {:ok, %{"content" => [], "stop_reason" => :end_turn}} end
+            llm_chat: fn _ -> {:ok, %AgentEx.LLM.Response{content: [], stop_reason: :end_turn}} end
           }
         )
 
@@ -30,16 +30,16 @@ defmodule AgentEx.ModelRouterTest do
     test "uses Selector in auto mode" do
       llm_chat = fn _params ->
         {:ok,
-         %{
-           "content" => [
+         %AgentEx.LLM.Response{
+           content: [
              %{
-               "type" => "text",
-               "text" =>
+               type: :text,
+               text:
                  ~s({"complexity": "simple", "required_capabilities": ["chat"], "needs_vision": false, "needs_audio": false, "needs_reasoning": false, "needs_large_context": false, "estimated_input_tokens": 50, "explanation": "test"})
              }
            ],
-           "stop_reason" => :end_turn,
-           "usage" => %{"input_tokens" => 10, "output_tokens" => 20}
+           stop_reason: :end_turn,
+           usage: %{input_tokens: 10, output_tokens: 20, cache_read: 0, cache_write: 0}
          }}
       end
 
@@ -70,16 +70,16 @@ defmodule AgentEx.ModelRouterTest do
     test "returns route and analysis" do
       llm_chat = fn _params ->
         {:ok,
-         %{
-           "content" => [
+         %AgentEx.LLM.Response{
+           content: [
              %{
-               "type" => "text",
-               "text" =>
+               type: :text,
+               text:
                  ~s({"complexity": "moderate", "required_capabilities": ["chat", "tools"], "needs_vision": false, "needs_audio": false, "needs_reasoning": false, "needs_large_context": false, "estimated_input_tokens": 500, "explanation": "test"})
              }
            ],
-           "stop_reason" => :end_turn,
-           "usage" => %{"input_tokens" => 10, "output_tokens" => 20}
+           stop_reason: :end_turn,
+           usage: %{input_tokens: 10, output_tokens: 20, cache_read: 0, cache_write: 0}
          }}
       end
 
@@ -109,7 +109,7 @@ defmodule AgentEx.ModelRouterTest do
           model_filter: :free_only,
           callbacks: %{
             llm_chat: fn _ ->
-              {:ok, %{"content" => [], "stop_reason" => :end_turn}}
+              {:ok, %AgentEx.LLM.Response{content: [], stop_reason: :end_turn}}
             end
           }
         )
@@ -135,16 +135,16 @@ defmodule AgentEx.ModelRouterTest do
     test "in auto mode, filters to free models via Selector" do
       llm_chat = fn _params ->
         {:ok,
-         %{
-           "content" => [
+         %AgentEx.LLM.Response{
+           content: [
              %{
-               "type" => "text",
-               "text" =>
+               type: :text,
+               text:
                  ~s({"complexity": "simple", "required_capabilities": ["chat"], "needs_vision": false, "needs_audio": false, "needs_reasoning": false, "needs_large_context": false, "estimated_input_tokens": 50, "explanation": "test"})
              }
            ],
-           "stop_reason" => :end_turn,
-           "usage" => %{"input_tokens" => 10, "output_tokens" => 20}
+           stop_reason: :end_turn,
+           usage: %{input_tokens: 10, output_tokens: 20, cache_read: 0, cache_write: 0}
          }}
       end
 

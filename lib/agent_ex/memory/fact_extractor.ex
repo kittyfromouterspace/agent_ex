@@ -288,9 +288,9 @@ defmodule AgentEx.Memory.FactExtractor do
     case llm_chat.(params) do
       {:ok, response} ->
         text =
-          (response["content"] || [])
-          |> Enum.filter(&(&1["type"] == "text"))
-          |> Enum.map_join("", &(&1["text"] || ""))
+          (response.content || [])
+          |> Enum.filter(&(&1.type == :text))
+          |> Enum.map_join("", &(&1.text || ""))
 
         parse_llm_facts(text, turn)
 

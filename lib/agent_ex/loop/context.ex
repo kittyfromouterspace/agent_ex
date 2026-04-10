@@ -143,7 +143,7 @@ defmodule AgentEx.Loop.Context do
           model_preference: :optimize_price | :optimize_speed,
           model_filter: :free_only | nil,
           activation: map(),
-          last_response: map() | nil,
+          last_response: AgentEx.LLM.Response.t() | nil,
           pending_tool_calls: list(map()),
           reentry_pipeline: (t() -> term()) | nil,
           summary_nudge_sent: boolean(),
@@ -181,11 +181,11 @@ defmodule AgentEx.Loop.Context do
   end
 
   @doc "Track cost and token usage from an LLM response."
-  def track_usage(ctx, response) do
-    cost = response["cost"] || 0.0
-    usage = response["usage"] || %{}
-    input = usage["input_tokens"] || 0
-    output = usage["output_tokens"] || 0
+  def track_usage(ctx, %AgentEx.LLM.Response{} = response) do
+    cost = response.cost || 0.0
+    usage = response.usage
+    input = usage.input_tokens
+    output = usage.output_tokens
 
     %{ctx | total_cost: ctx.total_cost + cost, total_tokens: ctx.total_tokens + input + output}
   end

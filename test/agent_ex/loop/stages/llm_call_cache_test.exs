@@ -9,11 +9,11 @@ defmodule AgentEx.Loop.Stages.LLMCallCacheTest do
 
   describe "cache awareness" do
     test "includes cache_control in params sent to llm_chat" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "ok"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{"input_tokens" => 10, "output_tokens" => 5},
-        "cost" => 0.0
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "ok"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 10, output_tokens: 5, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       self_pid = self()
@@ -34,11 +34,11 @@ defmodule AgentEx.Loop.Stages.LLMCallCacheTest do
     end
 
     test "detects prefix change on first call (nil hash)" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "ok"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{},
-        "cost" => 0.0
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "ok"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       self_pid = self()
@@ -57,11 +57,11 @@ defmodule AgentEx.Loop.Stages.LLMCallCacheTest do
     end
 
     test "prefix_changed is false when hash matches stable_prefix_hash" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "ok"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{},
-        "cost" => 0.0
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "ok"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       ctx = build_ctx(callbacks: %{llm_chat: fn _ -> {:ok, response} end})
@@ -86,11 +86,11 @@ defmodule AgentEx.Loop.Stages.LLMCallCacheTest do
     end
 
     test "stores stable_prefix_hash on context after call" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "ok"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{},
-        "cost" => 0.0
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "ok"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       ctx = build_ctx(callbacks: %{llm_chat: fn _ -> {:ok, response} end})
@@ -103,11 +103,11 @@ defmodule AgentEx.Loop.Stages.LLMCallCacheTest do
     end
 
     test "hash changes when tool list changes" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "ok"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{},
-        "cost" => 0.0
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "ok"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       ctx = build_ctx(callbacks: %{llm_chat: fn _ -> {:ok, response} end})
@@ -120,11 +120,11 @@ defmodule AgentEx.Loop.Stages.LLMCallCacheTest do
     end
 
     test "hash changes when system prompt changes" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "ok"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{},
-        "cost" => 0.0
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "ok"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       ctx = build_ctx(callbacks: %{llm_chat: fn _ -> {:ok, response} end})

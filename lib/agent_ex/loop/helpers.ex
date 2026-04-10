@@ -9,8 +9,8 @@ defmodule AgentEx.Loop.Helpers do
   @spec extract_text(term()) :: String.t()
   def extract_text(content) when is_list(content) do
     content
-    |> Enum.filter(&(&1["type"] == "text"))
-    |> Enum.map_join("", &(&1["text"] || ""))
+    |> Enum.filter(&(&1.type == :text))
+    |> Enum.map_join("", &(&1.text || ""))
   end
 
   def extract_text(content) when is_binary(content), do: content
@@ -19,7 +19,7 @@ defmodule AgentEx.Loop.Helpers do
   @doc "Extract tool_use blocks from a content block list."
   @spec extract_tool_calls(term()) :: [map()]
   def extract_tool_calls(content) when is_list(content) do
-    Enum.filter(content, &(&1["type"] == "tool_use"))
+    Enum.filter(content, &(&1.type == :tool_use))
   end
 
   def extract_tool_calls(_), do: []

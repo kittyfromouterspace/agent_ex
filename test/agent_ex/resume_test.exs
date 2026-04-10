@@ -79,11 +79,11 @@ defmodule AgentEx.ResumeTest do
 
       llm_chat = fn _params ->
         {:ok,
-         %{
-           "content" => [%{"type" => "text", "text" => "Resuming work..."}],
-           "stop_reason" => "end_turn",
-           "usage" => %{"input_tokens" => 50, "output_tokens" => 20},
-           "cost" => 0.001
+         %AgentEx.LLM.Response{
+           content: [%{type: :text, text: "Resuming work..."}],
+           stop_reason: :end_turn,
+           usage: %{input_tokens: 50, output_tokens: 20, cache_read: 0, cache_write: 0},
+           cost: 0.001
          }}
       end
 

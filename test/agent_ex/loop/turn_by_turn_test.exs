@@ -81,9 +81,9 @@ defmodule AgentEx.Loop.TurnByTurnTest do
 
       ctx =
         build_ctx(mode: :turn_by_turn, phase: :execute)
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "Done with tools."}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Done with tools."}],
+          stop_reason: :end_turn
         })
         |> Map.put(:reentry_pipeline, reentry)
 
@@ -94,17 +94,17 @@ defmodule AgentEx.Loop.TurnByTurnTest do
     test "ModeRouter passes tool_use through for execution" do
       ctx =
         build_ctx(mode: :turn_by_turn, phase: :review)
-        |> Map.put(:last_response, %{
-          "content" => [
-            %{"type" => "text", "text" => "Let me check."},
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [
+            %{type: :text, text: "Let me check."},
             %{
-              "type" => "tool_use",
-              "id" => "c1",
-              "name" => "read_file",
-              "input" => %{"path" => "a.txt"}
+              type: :tool_use,
+              id: "c1",
+              name: "read_file",
+              input: %{"path" => "a.txt"}
             }
           ],
-          "stop_reason" => "tool_use"
+          stop_reason: :tool_use
         })
         |> Map.put(:turns_used, 1)
 
@@ -119,9 +119,9 @@ defmodule AgentEx.Loop.TurnByTurnTest do
 
       ctx_review =
         build_ctx(mode: :turn_by_turn, phase: :review)
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "First chunk."}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "First chunk."}],
+          stop_reason: :end_turn
         })
 
       assert {:ok, r1} = ModeRouter.call(ctx_review, passthrough())
@@ -130,9 +130,9 @@ defmodule AgentEx.Loop.TurnByTurnTest do
 
       ctx_execute =
         build_ctx(mode: :turn_by_turn, phase: :execute)
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "Done executing."}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Done executing."}],
+          stop_reason: :end_turn
         })
         |> Map.put(:reentry_pipeline, reentry)
 

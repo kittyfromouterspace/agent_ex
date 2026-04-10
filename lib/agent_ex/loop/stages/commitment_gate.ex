@@ -41,9 +41,7 @@ defmodule AgentEx.Loop.Stages.CommitmentGate do
     commitment = CommitmentDetector.extract_commitment(ctx.accumulated_text)
     workspace_id = ctx.metadata[:workspace_id]
 
-    Logger.info(
-      "CommitmentGate: intercepted unfulfilled commitment in #{ctx.session_id}: #{inspect(commitment)}"
-    )
+    Logger.info("CommitmentGate: intercepted unfulfilled commitment in #{ctx.session_id}: #{inspect(commitment)}")
 
     Telemetry.event(
       [:commitment, :detected],
@@ -55,8 +53,8 @@ defmodule AgentEx.Loop.Stages.CommitmentGate do
 
     Context.emit_event(ctx, {:commitment_continuation, ctx.accumulated_text, workspace_id})
 
-    response = ctx.last_response || %{}
-    content = response["content"]
+    response = ctx.last_response || %AgentEx.LLM.Response{}
+    content = response.content
 
     assistant_msg = %{"role" => "assistant", "content" => content}
 

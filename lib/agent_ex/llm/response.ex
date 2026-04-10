@@ -10,12 +10,12 @@ defmodule AgentEx.LLM.Response do
     * `:stop_reason` — one of `:end_turn | :tool_use | :max_tokens | :error`
     * `:usage` — `%{input_tokens, output_tokens, cache_read, cache_write}`
       (cache fields default to `0`)
+    * `:cost` — computed USD cost for this call (set by LLMCall stage)
     * `:model_id` — provider-local model id (when known)
     * `:raw` — the unmodified decoded response body, kept for debugging
 
   Transports translate their wire format into this shape. The host
-  application is free to project this struct into whatever map shape
-  its callbacks consume.
+  application and all loop stages consume this struct directly.
   """
 
   @type content_block ::
@@ -35,6 +35,7 @@ defmodule AgentEx.LLM.Response do
           content: [content_block()],
           stop_reason: stop_reason(),
           usage: usage(),
+          cost: float(),
           model_id: String.t() | nil,
           raw: term()
         }
@@ -42,6 +43,7 @@ defmodule AgentEx.LLM.Response do
   defstruct content: [],
             stop_reason: :end_turn,
             usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+            cost: nil,
             model_id: nil,
             raw: nil
 end

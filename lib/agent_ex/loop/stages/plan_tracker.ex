@@ -33,9 +33,7 @@ defmodule AgentEx.Loop.Stages.PlanTracker do
     ctx = track_step_progress(ctx)
 
     if all_steps_complete?(ctx) do
-      Logger.info(
-        "PlanTracker: all steps complete for #{ctx.session_id}, transitioning to :verify"
-      )
+      Logger.info("PlanTracker: all steps complete for #{ctx.session_id}, transitioning to :verify")
 
       steps = ctx.plan[:steps] || []
 
@@ -115,8 +113,8 @@ defmodule AgentEx.Loop.Stages.PlanTracker do
         true
 
       text != "" and ctx.last_response != nil ->
-        stop_reason = ctx.last_response["stop_reason"] || ctx.last_response[:stop_reason]
-        stop_reason in ["end_turn", :end_turn] and text != ""
+        stop_reason = ctx.last_response.stop_reason
+        stop_reason == :end_turn and text != ""
 
       true ->
         false

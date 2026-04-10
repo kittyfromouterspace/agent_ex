@@ -9,11 +9,11 @@ defmodule AgentEx.Loop.Stages.LLMCallTest do
 
   describe "call/2" do
     test "calls llm_chat callback and stores response" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "Hello there."}],
-        "stop_reason" => "end_turn",
-        "usage" => %{"input_tokens" => 50, "output_tokens" => 30},
-        "cost" => 0.0005
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "Hello there."}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 50, output_tokens: 30, cache_read: 0, cache_write: 0},
+        cost: 0.0005
       }
 
       ctx = build_ctx(callbacks: %{llm_chat: fn _params -> {:ok, response} end})
@@ -24,11 +24,11 @@ defmodule AgentEx.Loop.Stages.LLMCallTest do
     end
 
     test "tracks usage from response" do
-      response = %{
-        "content" => [%{"type" => "text", "text" => "ok"}],
-        "stop_reason" => "end_turn",
-        "usage" => %{"input_tokens" => 100, "output_tokens" => 50},
-        "cost" => 0.002
+      response = %AgentEx.LLM.Response{
+        content: [%{type: :text, text: "ok"}],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 100, output_tokens: 50, cache_read: 0, cache_write: 0},
+        cost: 0.002
       }
 
       ctx = build_ctx(callbacks: %{llm_chat: fn _ -> {:ok, response} end})
@@ -51,11 +51,11 @@ defmodule AgentEx.Loop.Stages.LLMCallTest do
     end
 
     test "increments turns_used" do
-      response = %{
-        "content" => [],
-        "stop_reason" => "end_turn",
-        "usage" => %{"input_tokens" => 0, "output_tokens" => 0},
-        "cost" => 0.0
+      response = %AgentEx.LLM.Response{
+        content: [],
+        stop_reason: :end_turn,
+        usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+        cost: 0.0
       }
 
       ctx = build_ctx(callbacks: %{llm_chat: fn _ -> {:ok, response} end})

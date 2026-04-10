@@ -47,10 +47,10 @@ defmodule AgentEx.Loop.Stages.HumanCheckpoint do
 
     tool_preview =
       case ctx.last_response do
-        %{"content" => content} when is_list(content) ->
+        %AgentEx.LLM.Response{content: content} when is_list(content) ->
           content
-          |> Enum.filter(&(&1["type"] == "tool_use"))
-          |> Enum.map(&(&1["name"] || "unknown"))
+          |> Enum.filter(&(&1.type == :tool_use))
+          |> Enum.map(&(&1.name || "unknown"))
 
         _ ->
           []

@@ -31,9 +31,9 @@ defmodule AgentEx.Loop.AgenticPlannedTest do
 
       ctx =
         build_planned_ctx(messages: [%{"role" => "system", "content" => "sys"}])
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => plan_json}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: plan_json}],
+          stop_reason: :end_turn
         })
         |> Map.put(:reentry_pipeline, reentry)
 
@@ -125,9 +125,9 @@ defmodule AgentEx.Loop.AgenticPlannedTest do
 
       ctx =
         build_ctx(mode: :agentic_planned, phase: :plan)
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => plan_json}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: plan_json}],
+          stop_reason: :end_turn
         })
         |> Map.put(:reentry_pipeline, reentry)
 
@@ -142,11 +142,11 @@ defmodule AgentEx.Loop.AgenticPlannedTest do
 
       ctx =
         build_ctx(mode: :agentic_planned, phase: :plan)
-        |> Map.put(:last_response, %{
-          "content" => [
-            %{"type" => "text", "text" => "Step 1. Read the files\nStep 2. Fix the bug"}
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [
+            %{type: :text, text: "Step 1. Read the files\nStep 2. Fix the bug"}
           ],
-          "stop_reason" => "end_turn"
+          stop_reason: :end_turn
         })
         |> Map.put(:reentry_pipeline, reentry)
 

@@ -11,9 +11,9 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
     test "extracts text and passes to next stage" do
       ctx =
         build_ctx()
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "Here is the answer."}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Here is the answer."}],
+          stop_reason: :end_turn
         })
         |> Map.put(:turns_used, 1)
 
@@ -31,9 +31,9 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
 
       ctx =
         build_ctx()
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => ""}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: ""}],
+          stop_reason: :end_turn
         })
         |> Map.put(:turns_used, 1)
         |> Map.put(:accumulated_text, "")
@@ -49,23 +49,23 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
     test "stores pending_tool_calls" do
       ctx =
         build_ctx()
-        |> Map.put(:last_response, %{
-          "content" => [
-            %{"type" => "text", "text" => "Let me read that."},
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [
+            %{type: :text, text: "Let me read that."},
             %{
-              "type" => "tool_use",
-              "id" => "call_1",
-              "name" => "read_file",
-              "input" => %{"path" => "test.txt"}
+              type: :tool_use,
+              id: "call_1",
+              name: "read_file",
+              input: %{"path" => "test.txt"}
             }
           ],
-          "stop_reason" => "tool_use"
+          stop_reason: :tool_use
         })
         |> Map.put(:turns_used, 1)
 
       assert {:ok, result_ctx} = ModeRouter.call(ctx, passthrough())
       assert length(result_ctx.pending_tool_calls) == 1
-      assert hd(result_ctx.pending_tool_calls)["name"] == "read_file"
+      assert hd(result_ctx.pending_tool_calls).name == "read_file"
     end
   end
 
@@ -73,9 +73,9 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
     test "returns done with accumulated text" do
       ctx =
         build_ctx()
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "Partial response..."}],
-          "stop_reason" => "max_tokens"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Partial response..."}],
+          stop_reason: :max_tokens
         })
         |> Map.put(:turns_used, 1)
 
@@ -88,17 +88,17 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
     test "fires when turns_used >= max_turns" do
       ctx =
         build_ctx()
-        |> Map.put(:last_response, %{
-          "content" => [
-            %{"type" => "text", "text" => "More work to do."},
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [
+            %{type: :text, text: "More work to do."},
             %{
-              "type" => "tool_use",
-              "id" => "call_1",
-              "name" => "bash",
-              "input" => %{"command" => "ls"}
+              type: :tool_use,
+              id: "call_1",
+              name: "bash",
+              input: %{"command" => "ls"}
             }
           ],
-          "stop_reason" => "tool_use"
+          stop_reason: :tool_use
         })
         |> Map.put(:turns_used, 50)
         |> Map.put(:config, %{max_turns: 50, telemetry_prefix: [:agent_ex]})
@@ -132,9 +132,9 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
 
       ctx =
         build_ctx(mode: :agentic_planned, phase: :plan)
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => plan_json}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: plan_json}],
+          stop_reason: :end_turn
         })
         |> Map.put(:reentry_pipeline, reentry)
 
@@ -149,9 +149,9 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
     test "returns done with verification result" do
       ctx =
         build_ctx(mode: :agentic_planned, phase: :verify)
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "All steps verified."}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "All steps verified."}],
+          stop_reason: :end_turn
         })
 
       assert {:done, result} = ModeRouter.call(ctx, passthrough())
@@ -163,9 +163,9 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
     test "accumulates text and passes to next (HumanCheckpoint)" do
       ctx =
         build_ctx(mode: :turn_by_turn, phase: :review)
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "I'll refactor the module."}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "I'll refactor the module."}],
+          stop_reason: :end_turn
         })
 
       assert {:ok, result_ctx} = ModeRouter.call(ctx, passthrough())
@@ -179,9 +179,9 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
 
       ctx =
         build_ctx(mode: :turn_by_turn, phase: :execute)
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "Done with tools."}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Done with tools."}],
+          stop_reason: :end_turn
         })
         |> Map.put(:reentry_pipeline, reentry)
 
@@ -194,9 +194,9 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
     test "returns done with accumulated text" do
       ctx =
         build_ctx(mode: :conversational, phase: :execute)
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "Hello!"}],
-          "stop_reason" => "end_turn"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Hello!"}],
+          stop_reason: :end_turn
         })
 
       assert {:done, result} = ModeRouter.call(ctx, passthrough())
@@ -208,9 +208,9 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
     test "treats as end_turn and returns done" do
       ctx =
         build_ctx()
-        |> Map.put(:last_response, %{
-          "content" => [%{"type" => "text", "text" => "Something happened."}],
-          "stop_reason" => "unknown_reason"
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Something happened."}],
+          stop_reason: :unknown_reason
         })
 
       assert {:done, result} = ModeRouter.call(ctx, passthrough())

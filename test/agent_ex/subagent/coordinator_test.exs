@@ -28,11 +28,11 @@ defmodule AgentEx.Subagent.CoordinatorTest do
       callbacks = %{
         llm_chat: fn _params ->
           {:ok,
-           %{
-             "content" => [%{"type" => "text", "text" => "Subagent completed the task."}],
-             "stop_reason" => "end_turn",
-             "usage" => %{"input_tokens" => 50, "output_tokens" => 20},
-             "cost" => 0.001
+           %AgentEx.LLM.Response{
+             content: [%{type: :text, text: "Subagent completed the task."}],
+             stop_reason: :end_turn,
+             usage: %{input_tokens: 50, output_tokens: 20, cache_read: 0, cache_write: 0},
+             cost: 0.001
            }}
         end,
         execute_tool: fn name, _input, ctx -> {:ok, "mock result", ctx} end
@@ -60,11 +60,11 @@ defmodule AgentEx.Subagent.CoordinatorTest do
           Process.sleep(1000)
 
           {:ok,
-           %{
-             "content" => [%{"type" => "text", "text" => "done"}],
-             "stop_reason" => "end_turn",
-             "usage" => %{},
-             "cost" => 0.0
+           %AgentEx.LLM.Response{
+             content: [%{type: :text, text: "done"}],
+             stop_reason: :end_turn,
+             usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
+             cost: 0.0
            }}
         end,
         execute_tool: fn _, _, ctx -> {:ok, "mock", ctx} end

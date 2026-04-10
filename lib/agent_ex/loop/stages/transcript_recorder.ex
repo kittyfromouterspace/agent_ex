@@ -48,10 +48,15 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorder do
       type: "llm_response",
       turn: turn,
       data: %{
-        stop_reason: stringify_stop_reason(response["stop_reason"] || response[:stop_reason]),
-        usage: response["usage"],
-        cost: response["cost"],
-        content_preview: text_preview(response["content"])
+        stop_reason: stringify_stop_reason(response.stop_reason),
+        usage: %{
+          "input_tokens" => response.usage.input_tokens,
+          "output_tokens" => response.usage.output_tokens,
+          "cache_read_input_tokens" => response.usage.cache_read,
+          "cache_creation_input_tokens" => response.usage.cache_write
+        },
+        cost: response.cost,
+        content_preview: text_preview(response.content)
       }
     }
 
@@ -67,9 +72,9 @@ defmodule AgentEx.Loop.Stages.TranscriptRecorder do
         type: "tool_call",
         turn: turn,
         data: %{
-          id: call["id"],
-          name: call["name"],
-          input: call["input"]
+          id: call[:id] || call["id"],
+          name: call[:name] || call["name"],
+          input: call[:input] || call["input"]
         }
       }
 

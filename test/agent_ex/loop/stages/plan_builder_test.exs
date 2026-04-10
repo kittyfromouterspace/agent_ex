@@ -33,7 +33,7 @@ defmodule AgentEx.Loop.Stages.PlanBuilderTest do
         build_planned_ctx(
           messages: [
             %{"role" => "system", "content" => "sys"},
-            %{"role" => "user", "content" => [%{"type" => "text", "text" => "Fix the bug"}]}
+            %{"role" => "user", "content" => [%{type: :text, text: "Fix the bug"}]}
           ]
         )
 

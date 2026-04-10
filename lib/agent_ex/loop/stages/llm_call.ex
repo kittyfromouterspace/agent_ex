@@ -77,15 +77,15 @@ defmodule AgentEx.Loop.Stages.LLMCall do
     case result do
       {:ok, response} ->
         duration = System.monotonic_time() - start_time
-        usage = response["usage"] || %{}
+        usage = response.usage
 
-        input_tokens = usage["input_tokens"] || 0
-        output_tokens = usage["output_tokens"] || 0
-        cache_read = usage["cache_read"] || usage["cache_read_input_tokens"] || 0
-        cache_write = usage["cache_write"] || usage["cache_creation_input_tokens"] || 0
+        input_tokens = usage.input_tokens
+        output_tokens = usage.output_tokens
+        cache_read = usage.cache_read
+        cache_write = usage.cache_write
 
         cost_usd =
-          response["cost"] ||
+          response.cost ||
             compute_cost(used_route, %{
               input_tokens: input_tokens,
               output_tokens: output_tokens,
@@ -93,7 +93,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
               cache_write: cache_write
             })
 
-        response = Map.put(response, "cost", cost_usd)
+        response = %{response | cost: cost_usd}
 
         AgentEx.Telemetry.event(
           [:llm_call, :stop],
@@ -196,9 +196,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
         do_try_routes(routes, :auto, base_params, llm_chat, ctx, nil)
 
       {:error, reason} ->
-        Logger.warning(
-          "LLMCall: auto route resolution failed (#{inspect(reason)}), falling back to tier-based"
-        )
+        Logger.warning("LLMCall: auto route resolution failed (#{inspect(reason)}), falling back to tier-based")
 
         AgentEx.Telemetry.event([:model_router, :auto, :fallback], %{}, %{
           session_id: ctx.session_id,
@@ -209,9 +207,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
     end
   rescue
     e ->
-      Logger.warning(
-        "LLMCall: auto route resolution crashed: #{Exception.message(e)}, falling back to tier-based"
-      )
+      Logger.warning("LLMCall: auto route resolution crashed: #{Exception.message(e)}, falling back to tier-based")
 
       AgentEx.Telemetry.event([:model_router, :auto, :fallback], %{}, %{
         session_id: ctx.session_id,
@@ -244,9 +240,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   end
 
   defp do_try_routes([route | rest], tier, base_params, llm_chat, ctx, _last) do
-    Logger.debug(
-      "LLMCall: trying route #{route.provider_name}/#{route.model_id} (source: #{route.source})"
-    )
+    Logger.debug("LLMCall: trying route #{route.provider_name}/#{route.model_id} (source: #{route.source})")
 
     Context.emit_event(
       ctx,
@@ -288,9 +282,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
         routes
 
       other ->
-        Logger.warning(
-          "LLMCall: resolve_all returned #{inspect(other)}, proceeding without routes"
-        )
+        Logger.warning("LLMCall: resolve_all returned #{inspect(other)}, proceeding without routes")
 
         []
     end

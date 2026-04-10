@@ -19,28 +19,28 @@ defmodule AgentEx.IntegrationTest do
         if count == 0 do
           # First call: return tool_use
           {:ok,
-           %{
-             "content" => [
-               %{"type" => "text", "text" => "Let me read that file."},
+           %AgentEx.LLM.Response{
+             content: [
+               %{type: :text, text: "Let me read that file."},
                %{
-                 "type" => "tool_use",
-                 "id" => "call_1",
-                 "name" => "read_file",
-                 "input" => %{"path" => "test.txt"}
+                 type: :tool_use,
+                 id: "call_1",
+                 name: "read_file",
+                 input: %{"path" => "test.txt"}
                }
              ],
-             "stop_reason" => "tool_use",
-             "usage" => %{"input_tokens" => 100, "output_tokens" => 80},
-             "cost" => 0.002
+             stop_reason: :tool_use,
+             usage: %{input_tokens: 100, output_tokens: 80, cache_read: 0, cache_write: 0},
+             cost: 0.002
            }}
         else
           # Second call: return end_turn
           {:ok,
-           %{
-             "content" => [%{"type" => "text", "text" => "The file contains test data."}],
-             "stop_reason" => "end_turn",
-             "usage" => %{"input_tokens" => 200, "output_tokens" => 50},
-             "cost" => 0.003
+           %AgentEx.LLM.Response{
+             content: [%{type: :text, text: "The file contains test data."}],
+             stop_reason: :end_turn,
+             usage: %{input_tokens: 200, output_tokens: 50, cache_read: 0, cache_write: 0},
+             cost: 0.003
            }}
         end
       end
@@ -77,33 +77,33 @@ defmodule AgentEx.IntegrationTest do
 
         if count == 0 do
           {:ok,
-           %{
-             "content" => [
-               %{"type" => "text", "text" => "Let me read both files."},
+           %AgentEx.LLM.Response{
+             content: [
+               %{type: :text, text: "Let me read both files."},
                %{
-                 "type" => "tool_use",
-                 "id" => "call_1",
-                 "name" => "read_file",
-                 "input" => %{"path" => "a.txt"}
+                 type: :tool_use,
+                 id: "call_1",
+                 name: "read_file",
+                 input: %{"path" => "a.txt"}
                },
                %{
-                 "type" => "tool_use",
-                 "id" => "call_2",
-                 "name" => "read_file",
-                 "input" => %{"path" => "b.txt"}
+                 type: :tool_use,
+                 id: "call_2",
+                 name: "read_file",
+                 input: %{"path" => "b.txt"}
                }
              ],
-             "stop_reason" => "tool_use",
-             "usage" => %{"input_tokens" => 100, "output_tokens" => 80},
-             "cost" => 0.002
+             stop_reason: :tool_use,
+             usage: %{input_tokens: 100, output_tokens: 80, cache_read: 0, cache_write: 0},
+             cost: 0.002
            }}
         else
           {:ok,
-           %{
-             "content" => [%{"type" => "text", "text" => "Both files read successfully."}],
-             "stop_reason" => "end_turn",
-             "usage" => %{"input_tokens" => 200, "output_tokens" => 50},
-             "cost" => 0.003
+           %AgentEx.LLM.Response{
+             content: [%{type: :text, text: "Both files read successfully."}],
+             stop_reason: :end_turn,
+             usage: %{input_tokens: 200, output_tokens: 50, cache_read: 0, cache_write: 0},
+             cost: 0.003
            }}
         end
       end
@@ -165,19 +165,19 @@ defmodule AgentEx.IntegrationTest do
         :counters.add(turn, 1, 1)
 
         {:ok,
-         %{
-           "content" => [
-             %{"type" => "text", "text" => "Working..."},
+         %AgentEx.LLM.Response{
+           content: [
+             %{type: :text, text: "Working..."},
              %{
-               "type" => "tool_use",
-               "id" => "call_#{:counters.get(turn, 1)}",
-               "name" => "bash",
-               "input" => %{"command" => "echo hi"}
+               type: :tool_use,
+               id: "call_#{:counters.get(turn, 1)}",
+               name: "bash",
+               input: %{"command" => "echo hi"}
              }
            ],
-           "stop_reason" => "tool_use",
-           "usage" => %{"input_tokens" => 100, "output_tokens" => 80},
-           "cost" => 3.0
+           stop_reason: :tool_use,
+           usage: %{input_tokens: 100, output_tokens: 80, cache_read: 0, cache_write: 0},
+           cost: 3.0
          }}
       end
 
@@ -212,27 +212,27 @@ defmodule AgentEx.IntegrationTest do
 
         if count == 0 do
           {:ok,
-           %{
-             "content" => [
-               %{"type" => "text", "text" => "Checking."},
+           %AgentEx.LLM.Response{
+             content: [
+               %{type: :text, text: "Checking."},
                %{
-                 "type" => "tool_use",
-                 "id" => "call_1",
-                 "name" => "bash",
-                 "input" => %{"command" => "echo hello"}
+                 type: :tool_use,
+                 id: "call_1",
+                 name: "bash",
+                 input: %{"command" => "echo hello"}
                }
              ],
-             "stop_reason" => "tool_use",
-             "usage" => %{"input_tokens" => 50, "output_tokens" => 30},
-             "cost" => 0.001
+             stop_reason: :tool_use,
+             usage: %{input_tokens: 50, output_tokens: 30, cache_read: 0, cache_write: 0},
+             cost: 0.001
            }}
         else
           {:ok,
-           %{
-             "content" => [%{"type" => "text", "text" => "Done."}],
-             "stop_reason" => "end_turn",
-             "usage" => %{"input_tokens" => 50, "output_tokens" => 20},
-             "cost" => 0.001
+           %AgentEx.LLM.Response{
+             content: [%{type: :text, text: "Done."}],
+             stop_reason: :end_turn,
+             usage: %{input_tokens: 50, output_tokens: 20, cache_read: 0, cache_write: 0},
+             cost: 0.001
            }}
         end
       end
