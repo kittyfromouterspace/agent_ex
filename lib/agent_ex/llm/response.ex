@@ -40,10 +40,32 @@ defmodule AgentEx.LLM.Response do
           raw: term()
         }
 
+  @behaviour Access
+
   defstruct content: [],
             stop_reason: :end_turn,
             usage: %{input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0},
             cost: nil,
             model_id: nil,
             raw: nil
+
+  @impl Access
+  def fetch(response, key) when is_atom(key), do: Map.fetch(response, key)
+
+  def fetch(response, key) when is_binary(key) do
+    atom_key = String.to_existing_atom(key)
+    Map.fetch(response, atom_key)
+  rescue
+    ArgumentError -> :error
+  end
+
+  @impl Access
+  def get_and_update(response, key, fun) when is_atom(key) do
+    Map.get_and_update(response, key, fun)
+  end
+
+  @impl Access
+  def pop(response, key) when is_atom(key) do
+    Map.pop(response, key)
+  end
 end
