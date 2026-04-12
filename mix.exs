@@ -4,7 +4,7 @@ defmodule AgentEx.MixProject do
   def project do
     [
       app: :agent_ex,
-      version: "0.1.2",
+      version: "0.1.3",
       elixir: "~> 1.19",
       description: "A composable AI agent runtime",
       package: [
@@ -37,12 +37,13 @@ defmodule AgentEx.MixProject do
       {:req, "~> 0.5"},
       {:nimble_options, "~> 1.1"},
       # Mneme memory engine - now supports both PostgreSQL and libSQL
-      # {:mneme, path: "../mneme"},
-      {:mneme, git: "https://github.com/kittyfromouterspace/mneme.git", tag: "v0.2.1"},
+      {:mneme, git: "https://github.com/kittyfromouterspace/mneme.git", tag: "v0.3.0"},
       {:ecto_sql, "~> 3.12"},
       # Database drivers (optional - pick one based on your backend)
       {:postgrex, "~> 0.19", optional: true},
       {:ecto_libsql, "~> 0.9", optional: true},
+      {:ecto_sqlite3, "~> 0.18", optional: true},
+      {:sqlite_vec, "~> 0.1", optional: true},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:ex_check, "~> 0.16", only: [:dev], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

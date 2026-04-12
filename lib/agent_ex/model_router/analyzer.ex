@@ -97,7 +97,8 @@ defmodule AgentEx.ModelRouter.Analyzer do
       "messages" => messages,
       "model_tier" => "lightweight",
       "temperature" => 0.1,
-      "max_tokens" => 500
+      "max_tokens" => 500,
+      "internal" => true
     }
 
     case llm_chat.(params) do
