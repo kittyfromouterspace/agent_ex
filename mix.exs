@@ -4,7 +4,7 @@ defmodule AgentEx.MixProject do
   def project do
     [
       app: :agent_ex,
-      version: "0.1.0",
+      version: "0.1.2",
       elixir: "~> 1.19",
       description: "A composable AI agent runtime",
       package: [
