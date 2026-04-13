@@ -56,29 +56,23 @@ defmodule AgentEx.ModelRouter.Analyzer do
 
     duration = System.monotonic_time() - start_time
 
-    case result do
-      {:ok, analysis} ->
-        AgentEx.Telemetry.event(
-          [:model_router, :analysis, :stop],
-          %{
-            duration: duration
-          },
-          %{
-            method: method,
-            session_id: session_id,
-            complexity: analysis.complexity,
-            needs_vision: analysis.needs_vision,
-            needs_audio: analysis.needs_audio,
-            needs_reasoning: analysis.needs_reasoning,
-            needs_large_context: analysis.needs_large_context,
-            estimated_input_tokens: analysis.estimated_input_tokens,
-            required_capabilities: analysis.required_capabilities
-          }
-        )
+    {:ok, analysis} = result
 
-      _ ->
-        :ok
-    end
+    AgentEx.Telemetry.event(
+      [:model_router, :analysis, :stop],
+      %{duration: duration},
+      %{
+        method: method,
+        session_id: session_id,
+        complexity: analysis.complexity,
+        needs_vision: analysis.needs_vision,
+        needs_audio: analysis.needs_audio,
+        needs_reasoning: analysis.needs_reasoning,
+        needs_large_context: analysis.needs_large_context,
+        estimated_input_tokens: analysis.estimated_input_tokens,
+        required_capabilities: analysis.required_capabilities
+      }
+    )
 
     result
   end
