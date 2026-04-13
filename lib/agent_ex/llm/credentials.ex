@@ -5,13 +5,17 @@ defmodule AgentEx.LLM.Credentials do
   `resolve/1` walks the provider's declared `env_vars/0` in priority
   order and returns the first non-empty value wrapped in a `%Credentials{}`
   struct. The provider knows its own env var names; nothing else does.
+
+  `resolve/2` accepts an opts keyword list. If `opts[:api_key]` is set,
+  it is used directly instead of looking up env vars. This allows the
+  host application to inject keys per-call (e.g. from an encrypted store).
   """
 
   @type t :: %__MODULE__{
           api_key: String.t() | nil,
           headers: [{String.t(), String.t()}],
           base_url_override: String.t() | nil,
-          source: {:env, String.t()} | :none
+          source: {:env, String.t()} | {:injected} | :none
         }
 
   defstruct api_key: nil,
@@ -20,17 +24,44 @@ defmodule AgentEx.LLM.Credentials do
             source: :none
 
   @doc """
-  Resolve credentials for a provider module by walking its `env_vars/0`
-  in priority order. Returns the first non-empty value.
+  Resolve credentials for a provider module.
+
+  When `opts[:api_key]` is provided, uses that directly instead of
+  looking up environment variables. Falls back to env var lookup.
 
       iex> Credentials.resolve(AgentEx.LLM.Provider.OpenAI)
       {:ok, %Credentials{api_key: "sk-...", source: {:env, "OPENAI_API_KEY"}}}
 
-      iex> Credentials.resolve(AgentEx.LLM.Provider.Ollama)
-      {:ok, %Credentials{api_key: nil, source: :none}}
+      iex> Credentials.resolve(AgentEx.LLM.Provider.OpenAI, api_key: "sk-direct")
+      {:ok, %Credentials{api_key: "sk-direct", source: {:injected}}}
   """
-  @spec resolve(module()) :: {:ok, t()} | :not_configured
-  def resolve(provider) when is_atom(provider) do
+  @spec resolve(module(), keyword()) :: {:ok, t()} | :not_configured
+  def resolve(provider, opts \\ []) when is_atom(provider) do
+    case Keyword.get(opts, :api_key) do
+      key when is_binary(key) and key != "" ->
+        {:ok,
+         %__MODULE__{
+           api_key: key,
+           headers: provider.request_headers(%__MODULE__{api_key: key}),
+           source: {:injected}
+         }}
+
+      _ ->
+        resolve_from_env(provider)
+    end
+  end
+
+  @doc "Returns `true` when the provider has a usable credential."
+  @spec available?(module()) :: boolean()
+  def available?(provider) when is_atom(provider) do
+    case resolve(provider) do
+      {:ok, %__MODULE__{api_key: nil}} -> provider.id() == :ollama
+      {:ok, %__MODULE__{}} -> true
+      :not_configured -> false
+    end
+  end
+
+  defp resolve_from_env(provider) do
     env_vars = provider.env_vars()
 
     case find_first_env(env_vars) do
@@ -53,16 +84,6 @@ defmodule AgentEx.LLM.Credentials do
         else
           :not_configured
         end
-    end
-  end
-
-  @doc "Returns `true` when the provider has a usable credential."
-  @spec available?(module()) :: boolean()
-  def available?(provider) when is_atom(provider) do
-    case resolve(provider) do
-      {:ok, %__MODULE__{api_key: nil}} -> provider.id() == :ollama
-      {:ok, %__MODULE__{}} -> true
-      :not_configured -> false
     end
   end
 
