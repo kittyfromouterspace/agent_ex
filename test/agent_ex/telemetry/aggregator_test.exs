@@ -75,6 +75,23 @@ defmodule AgentEx.Telemetry.AggregatorTest do
       assert result.tool_success_count == 1
       assert result.total_duration_ms == 300
     end
+
+    test "groups tool events by mode" do
+      :telemetry.execute(
+        [:agent_ex, :orchestration, :tool_executed],
+        %{duration: 100, output_bytes: 50},
+        %{session_id: "s1", strategy: :default, mode: :agentic, tool_name: "read_file", success: true}
+      )
+
+      :telemetry.execute(
+        [:agent_ex, :orchestration, :tool_executed],
+        %{duration: 200, output_bytes: 0},
+        %{session_id: "s1", strategy: :default, mode: :conversational, tool_name: "bash", success: true}
+      )
+
+      assert Aggregator.summary(:default, :agentic).tool_call_count == 1
+      assert Aggregator.summary(:default, :conversational).tool_call_count == 1
+    end
   end
 
   describe "reset/0" do

@@ -52,7 +52,8 @@ defmodule AgentEx.LLM.Credentials do
   Resolve credentials for a provider module.
 
   When `opts[:api_key]` is provided, uses that directly instead of
-  looking up environment variables. Falls back to env var lookup.
+  looking up environment variables. Falls back to the runtime ETS store,
+  then to env var lookup.
 
       iex> Credentials.resolve(AgentEx.LLM.Provider.OpenAI)
       {:ok, %Credentials{api_key: "sk-...", source: {:env, "OPENAI_API_KEY"}}}
@@ -72,7 +73,7 @@ defmodule AgentEx.LLM.Credentials do
          }}
 
       _ ->
-        resolve_from_env(provider)
+        resolve_from_store_or_env(provider)
     end
   end
 
@@ -83,6 +84,23 @@ defmodule AgentEx.LLM.Credentials do
       {:ok, %__MODULE__{api_key: nil}} -> provider.id() == :ollama
       {:ok, %__MODULE__{}} -> true
       :not_configured -> false
+    end
+  end
+
+  defp resolve_from_store_or_env(provider) do
+    env_vars = provider.env_vars()
+
+    case find_first_in_store(env_vars) do
+      {:ok, {_var, key}} ->
+        {:ok,
+         %__MODULE__{
+           api_key: key,
+           headers: provider.request_headers(%__MODULE__{api_key: key}),
+           source: :injected
+         }}
+
+      :none ->
+        resolve_from_env(provider)
     end
   end
 
@@ -109,6 +127,25 @@ defmodule AgentEx.LLM.Credentials do
         else
           :not_configured
         end
+    end
+  end
+
+  defp find_first_in_store([]), do: :none
+
+  defp find_first_in_store(vars) do
+    if :ets.whereis(@table) == :undefined do
+      :none
+    else
+      do_find_first_in_store(vars)
+    end
+  end
+
+  defp do_find_first_in_store([]), do: :none
+
+  defp do_find_first_in_store([var | rest]) when is_binary(var) do
+    case :ets.lookup(@table, var) do
+      [{^var, key}] when is_binary(key) and key != "" -> {:ok, {var, key}}
+      _ -> do_find_first_in_store(rest)
     end
   end
 
