@@ -31,7 +31,7 @@ defmodule AgentEx.ModelRouter.Analyzer do
   Uses the cheapest available model (preferring free models) to classify
   the request. Falls back to heuristic analysis if no model is available.
   """
-  @spec analyze(String.t(), keyword()) :: {:ok, analysis()} | {:error, term()}
+  @spec analyze(String.t(), keyword()) :: {:ok, analysis()}
   def analyze(request, opts \\ []) do
     context_summary = Keyword.get(opts, :context_summary, "")
     session_id = Keyword.get(opts, :session_id)
@@ -56,37 +56,25 @@ defmodule AgentEx.ModelRouter.Analyzer do
 
     duration = System.monotonic_time() - start_time
 
-    case result do
-      {:ok, analysis} ->
-        AgentEx.Telemetry.event(
-          [:model_router, :analysis, :stop],
-          %{duration: duration},
-          %{
-            method: method,
-            session_id: session_id,
-            complexity: analysis.complexity,
-            needs_vision: analysis.needs_vision,
-            needs_audio: analysis.needs_audio,
-            needs_reasoning: analysis.needs_reasoning,
-            needs_large_context: analysis.needs_large_context,
-            estimated_input_tokens: analysis.estimated_input_tokens,
-            required_capabilities: analysis.required_capabilities
-          }
-        )
+    {:ok, analysis} = result
 
-        {:ok, analysis}
+    AgentEx.Telemetry.event(
+      [:model_router, :analysis, :stop],
+      %{duration: duration},
+      %{
+        method: method,
+        session_id: session_id,
+        complexity: analysis.complexity,
+        needs_vision: analysis.needs_vision,
+        needs_audio: analysis.needs_audio,
+        needs_reasoning: analysis.needs_reasoning,
+        needs_large_context: analysis.needs_large_context,
+        estimated_input_tokens: analysis.estimated_input_tokens,
+        required_capabilities: analysis.required_capabilities
+      }
+    )
 
-      {:error, reason} ->
-        Logger.warning("ModelRouter.Analyzer: analysis failed: #{inspect(reason)}")
-
-        AgentEx.Telemetry.event(
-          [:model_router, :analysis, :stop],
-          %{duration: duration},
-          %{method: method, session_id: session_id, error: inspect(reason)}
-        )
-
-        {:error, reason}
-    end
+    {:ok, analysis}
   end
 
   defp analyze_via_llm(request, context_summary, llm_chat, session_id) do
