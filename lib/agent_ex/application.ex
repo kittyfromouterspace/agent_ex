@@ -14,6 +14,7 @@ defmodule AgentEx.Application do
       AgentEx.LLM.UsageManager,
       AgentEx.ModelRouter,
       AgentEx.Protocol.Registry,
+      AgentEx.Strategy.Registry,
       AgentEx.Telemetry.Aggregator
     ]
 
@@ -21,7 +22,6 @@ defmodule AgentEx.Application do
 
     # Initialize ETS tables
     AgentEx.CircuitBreaker.init()
-    AgentEx.LLM.Credentials.init_store()
 
     # Register built-in protocols
     register_protocols()
