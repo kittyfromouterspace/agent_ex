@@ -18,6 +18,18 @@ defmodule AgentEx.Strategy.Experiment do
     :status
   ]
 
+  @type t :: %__MODULE__{
+          id: term(),
+          name: String.t() | nil,
+          description: String.t() | nil,
+          strategies: [atom()],
+          prompts: [String.t()],
+          repetitions: pos_integer(),
+          base_opts: keyword(),
+          results: [result()] | nil,
+          status: atom() | nil
+        }
+
   @type result :: %{
           strategy: atom(),
           prompt: String.t(),
