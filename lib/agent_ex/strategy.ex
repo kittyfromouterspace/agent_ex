@@ -13,7 +13,6 @@ defmodule AgentEx.Strategy do
   | `init/1` | Before first run | Strategy-specific setup |
   | `prepare_run/2` | Before each `AgentEx.run` | Modify profile, mode, system prompt, etc. |
   | `handle_result/3` | After each run completes | Decide: done, rerun, or record |
-  | `handle_event/2` | On `Context.emit_event/2` | Reactive adaptation |
   | `telemetry_tags/0` | In telemetry events | Strategy-specific dimensions |
   """
 
@@ -42,10 +41,7 @@ defmodule AgentEx.Strategy do
               | {:done, final_result :: map(), new_state :: state()}
               | {:error, term()}
 
-  @callback handle_event(event :: tuple(), state :: state()) ::
-              {:ok, new_state :: state()} | {:swap, strategy_id :: atom()} | :ignore
-
   @callback telemetry_tags() :: [{atom(), term()}]
 
-  @optional_callbacks [handle_event: 2, telemetry_tags: 0]
+  @optional_callbacks [telemetry_tags: 0]
 end

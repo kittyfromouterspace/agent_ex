@@ -125,14 +125,16 @@ defmodule AgentEx do
 
   defp resolve_strategy(opts) do
     case Keyword.get(opts, :strategy) do
-      nil -> AgentEx.Strategy.Default
-      id when is_atom(id) -> AgentEx.Strategy.Registry.fetch!(id)
-      mod when is_atom(mod) -> mod
+      nil ->
+        AgentEx.Strategy.Default
+
+      id when is_atom(id) ->
+        case AgentEx.Strategy.Registry.fetch(id) do
+          nil -> id
+          mod -> mod
+        end
     end
   end
-
-  @doc false
-  def resolve_strategy_for_test(opts), do: resolve_strategy(opts)
 
   defp run_single(opts) do
     prompt = Keyword.fetch!(opts, :prompt)

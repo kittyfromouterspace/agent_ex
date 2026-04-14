@@ -33,9 +33,5 @@ defmodule AgentEx.Strategy.DefaultTest do
     test "handle_result/3 with error returns error" do
       assert {:error, :timeout} = Default.handle_result({:error, :timeout}, [], nil)
     end
-
-    test "handle_event/2 returns ok with state" do
-      assert {:ok, :some_state} = Default.handle_event({:tool_use, "bash"}, :some_state)
-    end
   end
 end

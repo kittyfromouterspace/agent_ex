@@ -53,13 +53,60 @@ defmodule AgentEx.Strategy.IntegrationTest do
     end
   end
 
-  describe "resolve_strategy" do
-    test "nil strategy resolves to Default" do
-      assert AgentEx.resolve_strategy_for_test([]) == AgentEx.Strategy.Default
+  describe "strategy resolution through run/1" do
+    test "nil strategy uses Default (no strategy key)" do
+      workspace = create_test_workspace()
+      callbacks = mock_callbacks()
+
+      opts = [
+        prompt: "Say hello",
+        workspace: workspace,
+        callbacks: callbacks,
+        cost_limit: 0.10
+      ]
+
+      assert {:ok, %{text: _, cost: _, tokens: _, steps: _}} = AgentEx.run(opts)
     end
 
-    test "atom id resolves from registry" do
-      assert AgentEx.resolve_strategy_for_test(strategy: :default) == AgentEx.Strategy.Default
+    test "registered atom id resolves from registry" do
+      workspace = create_test_workspace()
+      callbacks = mock_callbacks()
+
+      opts = [
+        prompt: "Say hello",
+        workspace: workspace,
+        callbacks: callbacks,
+        strategy: :default,
+        cost_limit: 0.10
+      ]
+
+      assert {:ok, %{text: _, cost: _, tokens: _, steps: _}} = AgentEx.run(opts)
+    end
+
+    test "unregistered atom is used as module directly" do
+      defmodule InlineStrategy do
+        @behaviour AgentEx.Strategy
+        def id, do: :inline
+        def display_name, do: "Inline"
+        def description, do: "Test inline strategy"
+        def init(_), do: {:ok, nil}
+        def prepare_run(opts, state), do: {:ok, opts, state}
+        def handle_result({:ok, result}, _opts, state), do: {:done, result, state}
+        def handle_result({:error, reason}, _opts, _state), do: {:error, reason}
+      end
+
+      workspace = create_test_workspace()
+      callbacks = mock_callbacks()
+
+      opts = [
+        prompt: "Say hello",
+        workspace: workspace,
+        callbacks: callbacks,
+        strategy: InlineStrategy,
+        cost_limit: 0.10
+      ]
+
+      assert {:ok, %{text: _, cost: _, tokens: _, steps: _}} = AgentEx.run(opts)
     end
   end
 end
