@@ -71,10 +71,70 @@ defmodule AgentEx do
   - `:workspace_id` — workspace identifier for ContextKeeper (optional)
   - `:cost_limit` — per-session cost limit in USD (optional, default 5.0)
   - `:model_routes` — fallback model routes for routing (optional, e.g. `[primary: [...]]`)
+  - `:strategy` — orchestration strategy id or module (optional, default `:default`)
+  - `:strategy_opts` — extra opts passed to strategy `init/1` (optional)
 
   Returns `{:ok, %{text: string, cost: float, tokens: integer, steps: integer}}` or `{:error, reason}`.
   """
   def run(opts) do
+    strategy_mod = resolve_strategy(opts)
+    strategy_opts = Keyword.get(opts, :strategy_opts, [])
+
+    case strategy_mod.init(strategy_opts) do
+      {:ok, strategy_state} ->
+        run_with_strategy(strategy_mod, strategy_state, opts)
+
+      {:error, reason} ->
+        {:error, {:strategy_init, reason}}
+    end
+  end
+
+  defp run_with_strategy(mod, state, opts) do
+    case mod.prepare_run(opts, state) do
+      {:ok, prepared_opts, new_state} ->
+        prepared_opts = Keyword.put(prepared_opts, :strategy, mod.id())
+
+        case run_single(prepared_opts) do
+          {:ok, result} ->
+            handle_strategy_result(mod, {:ok, result}, prepared_opts, new_state)
+
+          {:error, reason} ->
+            mod.handle_result({:error, reason}, prepared_opts, new_state)
+        end
+
+      {:error, reason} ->
+        {:error, {:strategy_prepare, reason}}
+    end
+  end
+
+  defp handle_strategy_result(mod, result, opts, state) do
+    case mod.handle_result(result, opts, state) do
+      {:done, final_result, _final_state} ->
+        {:ok, final_result}
+
+      {:rerun, new_opts, new_state} ->
+        run_with_strategy(mod, new_state, new_opts)
+
+      {:ok, _new_state} ->
+        {:ok, elem(result, 1)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp resolve_strategy(opts) do
+    case Keyword.get(opts, :strategy) do
+      nil -> AgentEx.Strategy.Default
+      id when is_atom(id) -> AgentEx.Strategy.Registry.fetch!(id)
+      mod when is_atom(mod) -> mod
+    end
+  end
+
+  @doc false
+  def resolve_strategy_for_test(opts), do: resolve_strategy(opts)
+
+  defp run_single(opts) do
     prompt = Keyword.fetch!(opts, :prompt)
     workspace = Keyword.fetch!(opts, :workspace)
     callbacks = Keyword.fetch!(opts, :callbacks)

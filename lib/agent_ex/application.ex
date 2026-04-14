@@ -14,6 +14,7 @@ defmodule AgentEx.Application do
       AgentEx.LLM.UsageManager,
       AgentEx.ModelRouter,
       AgentEx.Protocol.Registry,
+      AgentEx.Strategy.Registry,
       AgentEx.Telemetry.Aggregator
     ]
 
