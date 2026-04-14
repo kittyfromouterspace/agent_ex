@@ -22,6 +22,7 @@ defmodule AgentEx.Application do
 
     # Initialize ETS tables
     AgentEx.CircuitBreaker.init()
+    AgentEx.LLM.Credentials.init_store()
 
     # Register built-in protocols
     register_protocols()

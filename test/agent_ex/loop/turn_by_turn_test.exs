@@ -114,9 +114,7 @@ defmodule AgentEx.Loop.TurnByTurnTest do
   end
 
   describe "multiple chunks with review→execute→review cycling" do
-    test "cycles through review and execute phases" do
-      reentry = fn ctx -> {:ok, ctx} end
-
+    test "review end_turn stops the loop, execute end_turn transitions to review" do
       ctx_review =
         build_ctx(mode: :turn_by_turn, phase: :review)
         |> Map.put(:last_response, %AgentEx.LLM.Response{
@@ -124,9 +122,10 @@ defmodule AgentEx.Loop.TurnByTurnTest do
           stop_reason: :end_turn
         })
 
-      assert {:ok, r1} = ModeRouter.call(ctx_review, passthrough())
-      assert r1.phase == :review
-      assert r1.accumulated_text == "First chunk."
+      assert {:done, result} = ModeRouter.call(ctx_review, passthrough())
+      assert result.text == "First chunk."
+
+      reentry = fn ctx -> {:ok, ctx} end
 
       ctx_execute =
         build_ctx(mode: :turn_by_turn, phase: :execute)

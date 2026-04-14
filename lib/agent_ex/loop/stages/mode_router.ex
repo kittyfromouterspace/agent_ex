@@ -121,12 +121,13 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     {:done, Helpers.result_from_context(ctx)}
   end
 
-  defp route(%Context{mode: :turn_by_turn, phase: :review} = ctx, next, :end_turn, content) do
+  defp route(%Context{mode: :turn_by_turn, phase: :review} = ctx, _next, :end_turn, content) do
     text = Helpers.extract_text(content)
     maybe_run_callback(ctx.callbacks[:on_response_facts], ctx, text)
     ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
-    emit_route_event(ctx, :end_turn, "next")
-    next.(ctx)
+    emit_route_event(ctx, :end_turn, "done")
+    emit_turn_event(ctx, :end_turn)
+    {:done, Helpers.result_from_context(ctx)}
   end
 
   defp route(%Context{mode: :turn_by_turn, phase: :review} = ctx, next, :tool_use, content) do

@@ -223,8 +223,10 @@ defmodule AgentEx.LLM.Catalog do
   end
 
   defp merge_models(existing, new_models, provider_id) do
+    pid_str = to_string(provider_id)
+
     existing
-    |> Map.filter(fn {{pid, _}, _} -> pid != provider_id end)
+    |> Map.filter(fn {{pid, _}, _} -> to_string(pid) != pid_str end)
     |> then(fn base ->
       Enum.reduce(new_models, base, fn model, acc ->
         Map.put(acc, {model.provider || provider_id, model.id}, model)
@@ -346,13 +348,13 @@ defmodule AgentEx.LLM.Catalog do
     |> Enum.map(fn data ->
       model = %Model{
         id: data["id"],
-        provider: data["provider"],
+        provider: to_atom_if_possible(data["provider"]),
         label: data["label"],
         context_window: data["context_window"],
         max_output_tokens: data["max_output_tokens"],
         cost: data["cost"],
-        capabilities: MapSet.new(data["capabilities"] || []),
-        tier_hint: data["tier_hint"],
+        capabilities: data["capabilities"] |> List.wrap() |> Enum.map(&to_atom_if_possible/1) |> MapSet.new(),
+        tier_hint: to_atom_if_possible(data["tier_hint"]),
         source: (data["source"] || "static") |> to_atom_if_possible()
       }
 

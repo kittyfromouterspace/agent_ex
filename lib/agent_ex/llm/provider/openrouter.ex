@@ -9,7 +9,10 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
 
   @behaviour AgentEx.LLM.Provider
 
-  alias AgentEx.LLM.{Credentials, Model, Usage, UsageWindow}
+  alias AgentEx.LLM.Credentials
+  alias AgentEx.LLM.Model
+  alias AgentEx.LLM.Usage
+  alias AgentEx.LLM.UsageWindow
 
   @default_base_url "https://openrouter.ai/api/v1"
 
@@ -43,13 +46,13 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
   def default_models do
     [
       %Model{
-        id: "anthropic/claude-sonnet-4",
+        id: "minimax/minimax-m2.5:free",
         provider: :openrouter,
-        label: "Claude Sonnet 4 (via OpenRouter)",
-        context_window: 200_000,
+        label: "MiniMax M2.5 Free (via OpenRouter)",
+        context_window: 1_000_000,
         max_output_tokens: 16_384,
-        cost: %{input: 3.0, output: 15.0},
-        capabilities: MapSet.new([:chat, :tools, :vision]),
+        cost: %{input: 0.0, output: 0.0},
+        capabilities: MapSet.new([:chat, :tools, :free]),
         tier_hint: :primary,
         source: :static
       }
@@ -57,8 +60,7 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
   end
 
   @impl true
-  def fetch_catalog(%Credentials{api_key: api_key} = _creds)
-      when is_binary(api_key) and api_key != "" do
+  def fetch_catalog(%Credentials{api_key: api_key} = _creds) when is_binary(api_key) and api_key != "" do
     headers = [
       {"Authorization", "Bearer #{api_key}"},
       {"content-type", "application/json"}
@@ -74,13 +76,12 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
 
           {:error, reason} ->
             require Logger
+
             Logger.warning("OpenRouter embedding catalog fetch failed: #{inspect(reason)}")
             []
         end
 
-      merged =
-        (chat_models ++ embedding_models)
-        |> Enum.uniq_by(& &1.id)
+      merged = Enum.uniq_by(chat_models ++ embedding_models, & &1.id)
 
       {:ok, merged}
     end
@@ -109,8 +110,7 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
   end
 
   @impl true
-  def fetch_usage(%Credentials{api_key: api_key} = _creds)
-      when is_binary(api_key) and api_key != "" do
+  def fetch_usage(%Credentials{api_key: api_key} = _creds) when is_binary(api_key) and api_key != "" do
     url = "#{@default_base_url}/auth/key"
 
     headers = [
@@ -144,8 +144,6 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
     credits =
       if is_number(limit) do
         %{used: used, limit: limit / 1.0}
-      else
-        nil
       end
 
     windows =

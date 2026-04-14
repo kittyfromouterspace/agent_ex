@@ -160,7 +160,7 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
   end
 
   describe ":turn_by_turn mode — :review phase" do
-    test "accumulates text and passes to next (HumanCheckpoint)" do
+    test "accumulates text and stops the loop" do
       ctx =
         build_ctx(mode: :turn_by_turn, phase: :review)
         |> Map.put(:last_response, %AgentEx.LLM.Response{
@@ -168,8 +168,8 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
           stop_reason: :end_turn
         })
 
-      assert {:ok, result_ctx} = ModeRouter.call(ctx, passthrough())
-      assert result_ctx.accumulated_text == "I'll refactor the module."
+      assert {:done, result} = ModeRouter.call(ctx, passthrough())
+      assert result.text == "I'll refactor the module."
     end
   end
 
