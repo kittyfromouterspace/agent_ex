@@ -17,19 +17,37 @@ defmodule AgentEx.Telemetry.AggregatorTest do
       :telemetry.execute(
         [:agent_ex, :orchestration, :turn],
         %{},
-        %{session_id: "s1", strategy: :default, mode: :agentic, phase: :execute, stop_reason: :end_turn}
+        %{
+          session_id: "s1",
+          strategy: :default,
+          mode: :agentic,
+          phase: :execute,
+          stop_reason: :end_turn
+        }
       )
 
       :telemetry.execute(
         [:agent_ex, :orchestration, :turn],
         %{},
-        %{session_id: "s1", strategy: :default, mode: :agentic, phase: :execute, stop_reason: :end_turn}
+        %{
+          session_id: "s1",
+          strategy: :default,
+          mode: :agentic,
+          phase: :execute,
+          stop_reason: :end_turn
+        }
       )
 
       :telemetry.execute(
         [:agent_ex, :orchestration, :turn],
         %{},
-        %{session_id: "s2", strategy: :default, mode: :conversational, phase: :execute, stop_reason: :end_turn}
+        %{
+          session_id: "s2",
+          strategy: :default,
+          mode: :conversational,
+          phase: :execute,
+          stop_reason: :end_turn
+        }
       )
 
       result = Aggregator.summary(:default)
@@ -42,7 +60,13 @@ defmodule AgentEx.Telemetry.AggregatorTest do
       :telemetry.execute(
         [:agent_ex, :orchestration, :turn],
         %{},
-        %{session_id: "s1", strategy: :default, mode: :agentic, phase: :execute, stop_reason: :max_tokens}
+        %{
+          session_id: "s1",
+          strategy: :default,
+          mode: :agentic,
+          phase: :execute,
+          stop_reason: :max_tokens
+        }
       )
 
       result = Aggregator.summary(:default, :agentic)
@@ -61,7 +85,13 @@ defmodule AgentEx.Telemetry.AggregatorTest do
       :telemetry.execute(
         [:agent_ex, :orchestration, :tool_executed],
         %{duration: 100, output_bytes: 50},
-        %{session_id: "s1", strategy: :default, mode: :agentic, tool_name: "read_file", success: true}
+        %{
+          session_id: "s1",
+          strategy: :default,
+          mode: :agentic,
+          tool_name: "read_file",
+          success: true
+        }
       )
 
       :telemetry.execute(
@@ -80,13 +110,25 @@ defmodule AgentEx.Telemetry.AggregatorTest do
       :telemetry.execute(
         [:agent_ex, :orchestration, :tool_executed],
         %{duration: 100, output_bytes: 50},
-        %{session_id: "s1", strategy: :default, mode: :agentic, tool_name: "read_file", success: true}
+        %{
+          session_id: "s1",
+          strategy: :default,
+          mode: :agentic,
+          tool_name: "read_file",
+          success: true
+        }
       )
 
       :telemetry.execute(
         [:agent_ex, :orchestration, :tool_executed],
         %{duration: 200, output_bytes: 0},
-        %{session_id: "s1", strategy: :default, mode: :conversational, tool_name: "bash", success: true}
+        %{
+          session_id: "s1",
+          strategy: :default,
+          mode: :conversational,
+          tool_name: "bash",
+          success: true
+        }
       )
 
       assert Aggregator.summary(:default, :agentic).tool_call_count == 1
@@ -99,7 +141,13 @@ defmodule AgentEx.Telemetry.AggregatorTest do
       :telemetry.execute(
         [:agent_ex, :orchestration, :turn],
         %{},
-        %{session_id: "s1", strategy: :default, mode: :agentic, phase: :execute, stop_reason: :end_turn}
+        %{
+          session_id: "s1",
+          strategy: :default,
+          mode: :agentic,
+          phase: :execute,
+          stop_reason: :end_turn
+        }
       )
 
       assert Aggregator.summary(:default, :agentic).turn_count == 1
@@ -115,13 +163,25 @@ defmodule AgentEx.Telemetry.AggregatorTest do
       :telemetry.execute(
         [:agent_ex, :orchestration, :tool_executed],
         %{duration: 100, output_bytes: 50},
-        %{session_id: "s1", strategy: :default, mode: :agentic, tool_name: "read_file", success: true}
+        %{
+          session_id: "s1",
+          strategy: :default,
+          mode: :agentic,
+          tool_name: "read_file",
+          success: true
+        }
       )
 
       :telemetry.execute(
         [:agent_ex, :orchestration, :tool_executed],
         %{duration: 200, output_bytes: 0},
-        %{session_id: "s1", strategy: :default, mode: :conversational, tool_name: "bash", success: true}
+        %{
+          session_id: "s1",
+          strategy: :default,
+          mode: :conversational,
+          tool_name: "bash",
+          success: true
+        }
       )
 
       # Allow async GenServer cast to process

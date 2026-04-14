@@ -72,7 +72,10 @@ defmodule AgentEx.Strategy.ExperimentTest do
         strategies: [:default],
         prompts: ["hello"],
         repetitions: 1,
-        base_opts: [workspace: "/tmp", callbacks: %{llm_chat: fn _ -> {:ok, %AgentEx.LLM.Response{}} end}],
+        base_opts: [
+          workspace: "/tmp",
+          callbacks: %{llm_chat: fn _ -> {:ok, %AgentEx.LLM.Response{}} end}
+        ],
         results: nil,
         status: :pending
       }

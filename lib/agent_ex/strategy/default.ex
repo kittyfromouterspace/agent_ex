@@ -24,5 +24,4 @@ defmodule AgentEx.Strategy.Default do
   @impl true
   def handle_result({:ok, result}, _opts, _state), do: {:done, result, nil}
   def handle_result({:error, reason}, _opts, _state), do: {:error, reason}
-
 end
