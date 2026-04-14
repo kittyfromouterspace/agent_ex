@@ -9,12 +9,13 @@ defmodule AgentEx.ModelRouter.Selector do
   """
 
   alias AgentEx.LLM.Catalog
+  alias AgentEx.LLM.Model
   alias AgentEx.ModelRouter.Analyzer
   alias AgentEx.ModelRouter.Preference
 
   require Logger
 
-  @type ranked_model :: {AgentEx.LLM.Model.t(), float()}
+  @type ranked_model :: {Model.t(), float()}
 
   @doc """
   Analyze a request and return ranked models for the given preference.
@@ -24,7 +25,7 @@ defmodule AgentEx.ModelRouter.Selector do
   falls back to heuristic analysis.
   """
   @spec select(String.t(), Preference.preference(), keyword()) ::
-          {:ok, {AgentEx.LLM.Model.t(), Analyzer.analysis()}} | {:error, term()}
+          {:ok, {Model.t(), Analyzer.analysis()}} | {:error, term()}
   def select(request, preference, opts \\ []) do
     context_summary = Keyword.get(opts, :context_summary, "")
     session_id = Keyword.get(opts, :session_id)
@@ -40,82 +41,82 @@ defmodule AgentEx.ModelRouter.Selector do
       model_filter: model_filter
     })
 
+    {:ok, analysis} =
+      Analyzer.analyze(request,
+        context_summary: context_summary,
+        llm_chat: llm_chat,
+        session_id: session_id
+      )
+
+    models = fetch_candidates(analysis, model_filter)
+
+    ranked =
+      models
+      |> Enum.map(fn model -> {model, Preference.score(model, preference, analysis)} end)
+      |> Enum.sort_by(fn {_model, score} -> score end)
+
+    duration = System.monotonic_time() - start_time
+
     result =
-      case Analyzer.analyze(request,
-             context_summary: context_summary,
-             llm_chat: llm_chat,
-             session_id: session_id
-           ) do
-        {:ok, analysis} ->
-          models = fetch_candidates(analysis, model_filter)
+      case ranked do
+        [{best, best_score} | _] ->
+          Logger.debug(
+            "ModelRouter.Selector: selected #{best.provider}/#{best.id} " <>
+              "(complexity: #{analysis.complexity}, preference: #{preference})"
+          )
 
-          ranked =
-            models
-            |> Enum.map(fn model -> {model, Preference.score(model, preference, analysis)} end)
-            |> Enum.sort_by(fn {_model, score} -> score end)
+          top3 =
+            ranked
+            |> Enum.take(3)
+            |> Enum.map(fn {m, s} ->
+              %{
+                provider: m.provider,
+                model_id: m.id,
+                label: m.label,
+                score: Float.round(s, 2)
+              }
+            end)
 
-          duration = System.monotonic_time() - start_time
+          AgentEx.Telemetry.event(
+            [:model_router, :selection, :stop],
+            %{
+              duration: duration,
+              candidate_count: length(ranked),
+              best_score: Float.round(best_score, 2)
+            },
+            %{
+              session_id: session_id,
+              preference: preference,
+              model_filter: model_filter,
+              complexity: analysis.complexity,
+              selected_provider: best.provider,
+              selected_model_id: best.id,
+              selected_label: best.label,
+              needs_vision: analysis.needs_vision,
+              needs_reasoning: analysis.needs_reasoning,
+              needs_large_context: analysis.needs_large_context,
+              top3: top3
+            }
+          )
 
-          case ranked do
-            [{best, best_score} | _] ->
-              Logger.debug(
-                "ModelRouter.Selector: selected #{best.provider}/#{best.id} " <>
-                  "(complexity: #{analysis.complexity}, preference: #{preference})"
-              )
+          {:ok, {best, analysis}}
 
-              top3 =
-                ranked
-                |> Enum.take(3)
-                |> Enum.map(fn {m, s} ->
-                  %{
-                    provider: m.provider,
-                    model_id: m.id,
-                    label: m.label,
-                    score: Float.round(s, 2)
-                  }
-                end)
+        [] ->
+          AgentEx.Telemetry.event(
+            [:model_router, :selection, :stop],
+            %{
+              duration: duration,
+              candidate_count: 0
+            },
+            %{
+              session_id: session_id,
+              preference: preference,
+              model_filter: model_filter,
+              error: :no_models_available
+            }
+          )
 
-              AgentEx.Telemetry.event(
-                [:model_router, :selection, :stop],
-                %{
-                  duration: duration,
-                  candidate_count: length(ranked),
-                  best_score: Float.round(best_score, 2)
-                },
-                %{
-                  session_id: session_id,
-                  preference: preference,
-                  model_filter: model_filter,
-                  complexity: analysis.complexity,
-                  selected_provider: best.provider,
-                  selected_model_id: best.id,
-                  selected_label: best.label,
-                  needs_vision: analysis.needs_vision,
-                  needs_reasoning: analysis.needs_reasoning,
-                  needs_large_context: analysis.needs_large_context,
-                  top3: top3
-                }
-              )
-
-              {:ok, {best, analysis}}
-
-            [] ->
-              AgentEx.Telemetry.event(
-                [:model_router, :selection, :stop],
-                %{
-                  duration: duration,
-                  candidate_count: 0
-                },
-                %{
-                  session_id: session_id,
-                  preference: preference,
-                  model_filter: model_filter,
-                  error: :no_models_available
-                }
-              )
-
-              {:error, :no_models_available}
-          end
+          {:error, :no_models_available}
       end
 
     result
@@ -131,32 +132,46 @@ defmodule AgentEx.ModelRouter.Selector do
     llm_chat = Keyword.get(opts, :llm_chat)
     model_filter = Keyword.get(opts, :model_filter)
 
-    case Analyzer.analyze(request,
-           context_summary: context_summary,
-           llm_chat: llm_chat,
-           session_id: session_id
-         ) do
-      {:ok, analysis} ->
-        models = fetch_candidates(analysis, model_filter)
+    {:ok, analysis} =
+      Analyzer.analyze(request,
+        context_summary: context_summary,
+        llm_chat: llm_chat,
+        session_id: session_id
+      )
 
-        ranked =
-          models
-          |> Enum.map(fn model -> {model, Preference.score(model, preference, analysis)} end)
-          |> Enum.sort_by(fn {_model, score} -> score end)
+    models = fetch_candidates(analysis, model_filter)
 
-        case ranked do
-          [{best, _} | _] ->
-            Logger.debug(
-              "ModelRouter.Selector: selected #{best.provider}/#{best.id} " <>
-                "(complexity: #{analysis.complexity}, preference: #{preference}, " <>
-                "#{length(ranked)} candidates)"
-            )
+    ranked =
+      models
+      |> Enum.map(fn model -> {model, Preference.score(model, preference, analysis)} end)
+      |> Enum.sort_by(fn {_model, score} -> score end)
 
-            {:ok, {Enum.map(ranked, fn {model, _score} -> model end), analysis}}
+    case ranked do
+      [{best, best_score} | _] ->
+        Logger.debug(
+          "ModelRouter.Selector: selected #{best.provider}/#{best.id} " <>
+            "(complexity: #{analysis.complexity}, preference: #{preference}, " <>
+            "#{length(ranked)} candidates, score: #{Float.round(best_score, 2)})"
+        )
 
-          [] ->
-            {:error, :no_models_available}
-        end
+        scores =
+          ranked
+          |> Enum.take(10)
+          |> Enum.map(fn {m, s} ->
+            %{
+              provider: m.provider,
+              model_id: m.id,
+              label: m.label,
+              score: Float.round(s, 2),
+              tier: m.tier_hint,
+              free: MapSet.member?(m.capabilities, :free)
+            }
+          end)
+
+        {:ok, {Enum.map(ranked, fn {model, _score} -> model end), analysis, scores}}
+
+      [] ->
+        {:error, :no_models_available}
     end
   end
 
@@ -190,13 +205,15 @@ defmodule AgentEx.ModelRouter.Selector do
 
     base = Catalog.find(has: required)
 
-    candidates =
+    if_result =
       if analysis.needs_vision do
         base
       else
         base ++ Catalog.find(has: [:chat])
       end
-      |> Enum.uniq_by(fn m -> {m.provider, m.id} end)
+
+    candidates =
+      Enum.uniq_by(if_result, fn m -> {m.provider, m.id} end)
 
     apply_filter(candidates, model_filter)
   end

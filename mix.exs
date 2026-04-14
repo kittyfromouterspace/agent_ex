@@ -37,8 +37,7 @@ defmodule AgentEx.MixProject do
       {:req, "~> 0.5"},
       {:nimble_options, "~> 1.1"},
       # Mneme memory engine - now supports both PostgreSQL and libSQL
-      # {:mneme, git: "https://github.com/kittyfromouterspace/mneme.git", tag: "v0.4.1"},
-      {:mneme, path: "../mneme"},
+      {:mneme, git: "https://github.com/kittyfromouterspace/mneme.git", tag: "v0.4.2"},
       {:ecto_sql, "~> 3.12"},
       # Database drivers (optional - pick one based on your backend)
       {:postgrex, "~> 0.19", optional: true},

@@ -70,7 +70,8 @@ defmodule AgentEx.AgentProtocol.CLI do
           optional(:image_arg) => String.t(),
           optional(:image_mode) => :repeat | :list,
           optional(:serialize) => boolean(),
-          optional(:reliability) => map()
+          optional(:reliability) => map(),
+          optional(:sandbox_wrapper) => String.t()
         }
 
   @doc """

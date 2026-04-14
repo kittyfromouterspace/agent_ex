@@ -202,12 +202,14 @@ defmodule AgentEx do
         initial_phase
       end
 
+    allowed_roots = Keyword.get(opts, :allowed_roots, [workspace])
+
     ctx =
       Context.new(
         session_id: session_id,
         user_id: user_id,
         caller: caller,
-        metadata: %{workspace: workspace, workspace_id: workspace_id},
+        metadata: %{workspace: workspace, workspace_id: workspace_id, allowed_roots: allowed_roots},
         messages: messages,
         core_tools: core_tools,
         tools: core_tools,

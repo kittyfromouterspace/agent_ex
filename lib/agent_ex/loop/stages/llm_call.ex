@@ -170,7 +170,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
 
   defp try_auto_routes(ctx, base_params, llm_chat) do
     case ModelRouter.resolve_for_context(ctx) do
-      {:ok, routes, analysis} when is_list(routes) ->
+      {:ok, routes, analysis, scores} when is_list(routes) ->
         if analysis do
           Logger.debug(
             "LLMCall: auto mode selected model (complexity: #{analysis.complexity}, " <>
@@ -189,34 +189,50 @@ defmodule AgentEx.Loop.Stages.LLMCall do
             selected_model: (List.first(routes) || %{})[:model_id],
             selected_provider: (List.first(routes) || %{})[:provider_name]
           })
+
+          Context.emit_event(
+            ctx,
+            {:model_selection_detail,
+             %{
+               complexity: analysis.complexity,
+               needs_vision: analysis.needs_vision,
+               needs_audio: analysis.needs_audio,
+               needs_reasoning: analysis.needs_reasoning,
+               needs_large_context: analysis.needs_large_context,
+               explanation: analysis[:explanation] || "",
+               preference: ctx.model_preference,
+               filter: ctx.model_filter,
+               candidates: scores || [],
+               selected: %{
+                 model_id: (List.first(routes) || %{})[:model_id],
+                 provider: (List.first(routes) || %{})[:provider_name]
+               }
+             }}
+          )
         end
 
         do_try_routes(routes, :auto, base_params, llm_chat, ctx, nil)
 
       {:error, reason} ->
-        Logger.warning(
-          "LLMCall: auto route resolution failed (#{inspect(reason)}), falling back to tier-based"
-        )
+        Logger.warning("LLMCall: auto route resolution failed (#{inspect(reason)}), falling back to tier-based")
 
         AgentEx.Telemetry.event([:model_router, :auto, :fallback], %{}, %{
           session_id: ctx.session_id,
           reason: inspect(reason)
         })
 
-        try_routes_for_tier(ctx.model_tier || :primary, base_params, llm_chat, ctx)
+        do_try_routes_for_tier(ctx, base_params, llm_chat)
     end
   rescue
     e ->
-      Logger.warning(
-        "LLMCall: auto route resolution crashed: #{Exception.message(e)}, falling back to tier-based"
-      )
+      Logger.warning("LLMCall: auto route resolution crashed: #{Exception.message(e)}, falling back to tier-based")
 
       AgentEx.Telemetry.event([:model_router, :auto, :fallback], %{}, %{
         session_id: ctx.session_id,
         reason: Exception.message(e)
       })
 
-      try_routes_for_tier(ctx.model_tier || :primary, base_params, llm_chat, ctx)
+      do_try_routes_for_tier(ctx, base_params, llm_chat)
   end
 
   # Walk every healthy route for the tier in priority order. On success
@@ -225,10 +241,31 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   # threshold is hit), and try the next route. If every route fails we
   # invoke the callback one final time WITHOUT a `_route` so the host's
   # configured-provider fallback (if any) gets a chance.
-  defp try_routes_for_tier(tier, base_params, llm_chat, ctx) do
-    routes = resolve_routes(tier)
+  defp try_routes_for_tier(_tier, base_params, llm_chat, ctx) do
+    do_try_routes_for_tier(ctx, base_params, llm_chat)
+  end
+
+  defp do_try_routes_for_tier(ctx, base_params, llm_chat) do
+    tier = ctx.model_tier || :primary
+    model_filter = Map.get(ctx, :model_filter)
+
+    routes =
+      case resolve_routes(tier) do
+        routes when is_list(routes) -> filter_routes_by_model_filter(routes, model_filter)
+        other -> other
+      end
+
     do_try_routes(routes, tier, base_params, llm_chat, ctx, nil)
   end
+
+  defp filter_routes_by_model_filter(routes, :free_only) do
+    Enum.filter(routes, fn route ->
+      MapSet.member?(route.capabilities, :free)
+    end)
+  end
+
+  defp filter_routes_by_model_filter(routes, nil), do: routes
+  defp filter_routes_by_model_filter(routes, _), do: routes
 
   defp do_try_routes([], _tier, base_params, llm_chat, _ctx, last_error) do
     Logger.debug("LLMCall: all routes exhausted, calling callback without _route")
@@ -242,9 +279,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   end
 
   defp do_try_routes([route | rest], tier, base_params, llm_chat, ctx, _last) do
-    Logger.debug(
-      "LLMCall: trying route #{route.provider_name}/#{route.model_id} (source: #{route.source})"
-    )
+    Logger.debug("LLMCall: trying route #{route.provider_name}/#{route.model_id} (source: #{route.source})")
 
     Context.emit_event(
       ctx,
@@ -286,9 +321,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
         routes
 
       other ->
-        Logger.warning(
-          "LLMCall: resolve_all returned #{inspect(other)}, proceeding without routes"
-        )
+        Logger.warning("LLMCall: resolve_all returned #{inspect(other)}, proceeding without routes")
 
         []
     end
@@ -301,17 +334,14 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   # Phase 2: errors carry a structured classification from the
   # ErrorClassifier. We map to the ModelRouter failure-type vocabulary.
   # Legacy string/integer-status shapes still handled as fallback.
-  defp classify_error({:error, %{classification: classification}}),
-    do: legacy_failure(classification)
+  defp classify_error({:error, %{classification: classification}}), do: legacy_failure(classification)
 
   defp classify_error({:error, %{status: 429}}), do: :rate_limit
   defp classify_error({:error, %{status: status}}) when status in [401, 403], do: :auth_error
 
-  defp classify_error({:error, %{status: status}}) when is_integer(status) and status >= 500,
-    do: :other
+  defp classify_error({:error, %{status: status}}) when is_integer(status) and status >= 500, do: :other
 
-  defp classify_error({:error, %{message: msg}}) when is_binary(msg),
-    do: classify_error({:error, msg})
+  defp classify_error({:error, %{message: msg}}) when is_binary(msg), do: classify_error({:error, msg})
 
   defp classify_error({:error, reason}) when is_binary(reason) do
     cond do
@@ -368,18 +398,15 @@ defmodule AgentEx.Loop.Stages.LLMCall do
 
   defp compute_stable_hash(stable_prefix, tools) do
     stable_content =
-      stable_prefix
-      |> Enum.map(fn msg -> Jason.encode!(msg) end)
-      |> Enum.join("|")
+      Enum.map_join(stable_prefix, "|", fn msg -> Jason.encode!(msg) end)
 
     tools_content =
-      tools
-      |> Enum.map(fn tool -> tool["name"] || "" end)
-      |> Enum.join(",")
+      Enum.map_join(tools, ",", fn tool -> tool["name"] || "" end)
 
     data = stable_content <> "||" <> tools_content
 
-    :crypto.hash(:sha256, data)
+    :sha256
+    |> :crypto.hash(data)
     |> Base.encode16(case: :lower)
     |> String.slice(0, 16)
   end

@@ -29,7 +29,8 @@ defmodule AgentEx.ModelRouter do
 
   alias AgentEx.LLM.Catalog
   alias AgentEx.LLM.Model
-  alias AgentEx.ModelRouter.{Preference, Selector}
+  alias AgentEx.ModelRouter.Preference
+  alias AgentEx.ModelRouter.Selector
 
   require Logger
 
@@ -99,7 +100,7 @@ defmodule AgentEx.ModelRouter do
           ]
 
           case Selector.select_all(request, preference, opts) do
-            {:ok, {models, analysis}} ->
+            {:ok, {models, analysis, scores}} ->
               routes = Enum.map(models, &model_to_route/1)
               best = List.first(models)
 
@@ -121,7 +122,7 @@ defmodule AgentEx.ModelRouter do
                 }
               )
 
-              {:ok, routes, analysis}
+              {:ok, routes, analysis, scores}
 
             {:error, reason} ->
               AgentEx.Telemetry.event(
@@ -504,8 +505,6 @@ defmodule AgentEx.ModelRouter do
           _ ->
             ""
         end
-      else
-        nil
       end
     end)
   end
@@ -521,11 +520,11 @@ defmodule AgentEx.ModelRouter do
       end
 
     parts =
-      if ctx.tools != [] do
-        tool_names = Enum.map(ctx.tools, & &1["name"]) |> Enum.join(", ")
-        ["Available tools: #{tool_names}" | parts]
-      else
+      if ctx.tools == [] do
         parts
+      else
+        tool_names = Enum.map_join(ctx.tools, ", ", & &1["name"])
+        ["Available tools: #{tool_names}" | parts]
       end
 
     parts =

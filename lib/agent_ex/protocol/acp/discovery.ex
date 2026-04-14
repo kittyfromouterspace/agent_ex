@@ -23,6 +23,12 @@ defmodule AgentEx.Protocol.ACP.Discovery do
   @doc "Returns the ETS table name (for testing)."
   def table_name, do: @table
 
+  @type os_directories :: %{
+          config: [String.t()],
+          logs: [String.t()],
+          cache: [String.t()]
+        }
+
   @type agent_entry :: %{
           name: atom(),
           command: String.t(),
@@ -30,6 +36,7 @@ defmodule AgentEx.Protocol.ACP.Discovery do
           display: String.t(),
           aliases: [atom()],
           cache_dirs: [String.t()],
+          directories: %{linux: os_directories(), macos: os_directories(), windows: os_directories()},
           notes: String.t() | nil
         }
 
@@ -44,7 +51,12 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       args: ["acp"],
       display: "Kimi Code",
       aliases: [],
-      cache_dirs: []
+      cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/kimi"], logs: ["~/.local/share/kimi/logs"], cache: []},
+        macos: %{config: ["~/Library/Application Support/Kimi"], logs: ["~/Library/Logs/Kimi"], cache: ["~/Library/Caches/Kimi"]},
+        windows: %{config: ["#{LOCALAPPDATA}/Kimi"], logs: ["#{LOCALAPPDATA}/Kimi/logs"], cache: ["#{LOCALAPPDATA}/Kimi/Cache"]}
+      }
     },
     %{
       name: :claude,
@@ -53,6 +65,11 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       display: "Claude Code",
       aliases: [:claude_code],
       cache_dirs: ["~/.claude/projects"],
+      directories: %{
+        linux: %{config: ["~/.claude"], logs: ["~/.claude/logs"], cache: ["~/.claude/projects"]},
+        macos: %{config: ["~/.claude", "~/Library/Application Support/Claude"], logs: ["~/Library/Logs/Claude"], cache: ["~/Library/Caches/com.anthropic.claude"]},
+        windows: %{config: ["#{LOCALAPPDATA}/AnthropicClaude"], logs: ["#{LOCALAPPDATA}/AnthropicClaude/logs"], cache: ["#{LOCALAPPDATA}/AnthropicClaude/cache"]}
+      },
       notes: "Requires @agentclientprotocol/claude-agent-acp package or claude binary"
     },
     %{
@@ -62,6 +79,11 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       display: "Codex CLI",
       aliases: [],
       cache_dirs: ["~/.codex"],
+      directories: %{
+        linux: %{config: ["~/.codex"], logs: ["~/.codex/logs"], cache: ["~/.codex/cache"]},
+        macos: %{config: ["~/.codex"], logs: ["~/Library/Logs/Codex"], cache: ["~/Library/Caches/Codex"]},
+        windows: %{config: ["#{LOCALAPPDATA}/Codex"], logs: ["#{LOCALAPPDATA}/Codex/logs"], cache: ["#{LOCALAPPDATA}/Codex/cache"]}
+      },
       notes: "Or via npx @zed-industries/codex-acp"
     },
     %{
@@ -70,7 +92,12 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       args: ["acp"],
       display: "Cursor",
       aliases: [],
-      cache_dirs: []
+      cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.cursor"], logs: ["~/.cursor/logs"], cache: []},
+        macos: %{config: ["~/.cursor", "~/Library/Application Support/Cursor"], logs: ["~/Library/Logs/Cursor"], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/Cursor"], logs: ["#{LOCALAPPDATA}/Cursor/logs"], cache: []}
+      }
     },
     %{
       name: :gemini,
@@ -79,6 +106,11 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       display: "Gemini CLI",
       aliases: [],
       cache_dirs: ["~/.gemini"],
+      directories: %{
+        linux: %{config: ["~/.gemini"], logs: ["~/.gemini/logs"], cache: ["~/.gemini/cache"]},
+        macos: %{config: ["~/.gemini"], logs: ["~/Library/Logs/Gemini"], cache: ["~/Library/Caches/Gemini"]},
+        windows: %{config: ["#{LOCALAPPDATA}/Gemini"], logs: ["#{LOCALAPPDATA}/Gemini/logs"], cache: ["#{LOCALAPPDATA}/Gemini/cache"]}
+      },
       notes: "Gemini < 0.33.0 needs --experimental-acp"
     },
     %{
@@ -88,6 +120,11 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       display: "GitHub Copilot",
       aliases: [],
       cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/github-copilot"], logs: [], cache: []},
+        macos: %{config: ["~/.config/github-copilot"], logs: [], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/GitHub/Copilot"], logs: [], cache: []}
+      },
       notes: "Pre-flight --help check for ACP support"
     },
     %{
@@ -97,6 +134,11 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       display: "OpenCode",
       aliases: [],
       cache_dirs: ["~/.local/share/opencode"],
+      directories: %{
+        linux: %{config: ["~/.config/opencode"], logs: ["~/.local/share/opencode/logs"], cache: ["~/.local/share/opencode"]},
+        macos: %{config: ["~/.opencode", "~/Library/Application Support/OpenCode"], logs: ["~/Library/Logs/OpenCode"], cache: ["~/Library/Caches/OpenCode"]},
+        windows: %{config: ["#{LOCALAPPDATA}/OpenCode"], logs: ["#{LOCALAPPDATA}/OpenCode/logs"], cache: ["#{LOCALAPPDATA}/OpenCode/cache"]}
+      },
       notes: "Or via npx -y opencode-ai acp"
     },
     %{
@@ -105,7 +147,12 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       args: ["acp"],
       display: "Goose",
       aliases: [],
-      cache_dirs: ["~/.config/goose"]
+      cache_dirs: ["~/.config/goose"],
+      directories: %{
+        linux: %{config: ["~/.config/goose"], logs: ["~/.config/goose/logs"], cache: ["~/.config/goose/cache"]},
+        macos: %{config: ["~/.config/goose", "~/Library/Application Support/Goose"], logs: ["~/Library/Logs/Goose"], cache: ["~/Library/Caches/Goose"]},
+        windows: %{config: ["#{LOCALAPPDATA}/Goose"], logs: ["#{LOCALAPPDATA}/Goose/logs"], cache: ["#{LOCALAPPDATA}/Goose/cache"]}
+      }
     },
     %{
       name: :kiro,
@@ -113,7 +160,12 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       args: ["acp"],
       display: "Kiro CLI",
       aliases: [],
-      cache_dirs: []
+      cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/kiro"], logs: [], cache: []},
+        macos: %{config: ["~/Library/Application Support/Kiro"], logs: [], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/Kiro"], logs: [], cache: []}
+      }
     },
     %{
       name: :qwen,
@@ -121,7 +173,12 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       args: ["--acp"],
       display: "Qwen Code",
       aliases: [],
-      cache_dirs: []
+      cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/qwen"], logs: [], cache: []},
+        macos: %{config: ["~/Library/Application Support/Qwen"], logs: [], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/Qwen"], logs: [], cache: []}
+      }
     },
     %{
       name: :qoder,
@@ -130,6 +187,11 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       display: "Qoder CLI",
       aliases: [],
       cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/qoder"], logs: [], cache: []},
+        macos: %{config: ["~/Library/Application Support/Qoder"], logs: [], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/Qoder"], logs: [], cache: []}
+      },
       notes: "Supports --max-turns and --allowed-tools args"
     },
     %{
@@ -138,7 +200,12 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       args: ["exec", "--output-format", "acp"],
       display: "Factory Droid",
       aliases: [:factory_droid, :factorydroid],
-      cache_dirs: []
+      cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/droid"], logs: [], cache: []},
+        macos: %{config: ["~/Library/Application Support/Droid"], logs: [], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/Droid"], logs: [], cache: []}
+      }
     },
     %{
       name: :openclaw,
@@ -146,7 +213,12 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       args: ["acp"],
       display: "OpenClaw",
       aliases: [],
-      cache_dirs: []
+      cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/openclaw"], logs: [], cache: []},
+        macos: %{config: ["~/Library/Application Support/OpenClaw"], logs: [], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/OpenClaw"], logs: [], cache: []}
+      }
     },
     %{
       name: :pi,
@@ -155,6 +227,11 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       display: "Pi",
       aliases: [],
       cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/pi"], logs: [], cache: []},
+        macos: %{config: ["~/Library/Application Support/Pi"], logs: [], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/Pi"], logs: [], cache: []}
+      },
       notes: "Or via npx pi-acp"
     },
     %{
@@ -163,7 +240,12 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       args: ["acp", "serve"],
       display: "Trae",
       aliases: [],
-      cache_dirs: []
+      cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/trae"], logs: [], cache: []},
+        macos: %{config: ["~/Library/Application Support/Trae"], logs: [], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/Trae"], logs: [], cache: []}
+      }
     },
     %{
       name: :iflow,
@@ -172,6 +254,11 @@ defmodule AgentEx.Protocol.ACP.Discovery do
       display: "iFlow",
       aliases: [],
       cache_dirs: [],
+      directories: %{
+        linux: %{config: ["~/.config/iflow"], logs: [], cache: []},
+        macos: %{config: ["~/Library/Application Support/iFlow"], logs: [], cache: []},
+        windows: %{config: ["#{LOCALAPPDATA}/iFlow"], logs: [], cache: []}
+      },
       notes: "Experimental ACP support"
     }
   ]
@@ -198,6 +285,20 @@ defmodule AgentEx.Protocol.ACP.Discovery do
     Enum.find(@known_agents, fn entry ->
       entry.name == name or name in Map.get(entry, :aliases, [])
     end)
+  end
+
+  @doc """
+  Return the resolved directories for an agent on the current OS.
+
+  Returns a map with `config`, `logs`, and `cache` keys containing
+  expanded absolute paths. Returns `nil` if the agent is unknown.
+  """
+  @spec agent_directories(atom()) :: os_directories() | nil
+  def agent_directories(name) do
+    case lookup_known(name) do
+      nil -> nil
+      entry -> resolve_os_directories(entry.directories)
+    end
   end
 
   @doc """
@@ -357,13 +458,24 @@ defmodule AgentEx.Protocol.ACP.Discovery do
               args: if(rest != [], do: String.split(hd(rest), ~r/\s+/), else: ["acp"]),
               display: name,
               aliases: [],
-              cache_dirs: []
+              cache_dirs: [],
+              directories: %{
+                linux: %{config: [], logs: [], cache: []},
+                macos: %{config: [], logs: [], cache: []},
+                windows: %{config: [], logs: [], cache: []}
+              }
             }
           end)
       end
 
     Enum.map(app_config ++ env_config, fn
       entry when is_map(entry) ->
+        dirs = entry[:directories] || entry["directories"] || %{
+          linux: %{config: [], logs: [], cache: []},
+          macos: %{config: [], logs: [], cache: []},
+          windows: %{config: [], logs: [], cache: []}
+        }
+
         %{
           name: entry[:name] || entry["name"] || :unknown,
           command: entry[:command] || entry["command"] || "unknown",
@@ -371,7 +483,8 @@ defmodule AgentEx.Protocol.ACP.Discovery do
           display:
             entry[:display] || entry["display"] || to_string(entry[:name] || entry["name"]),
           aliases: entry[:aliases] || entry["aliases"] || [],
-          cache_dirs: entry[:cache_dirs] || entry["cache_dirs"] || []
+          cache_dirs: entry[:cache_dirs] || entry["cache_dirs"] || [],
+          directories: dirs
         }
 
       _ ->
@@ -388,5 +501,38 @@ defmodule AgentEx.Protocol.ACP.Discovery do
         :ets.insert(@table, {{:agent, alias_name}, entry})
       end)
     end)
+  end
+
+  @spec resolve_os_directories(%{linux: os_directories(), macos: os_directories(), windows: os_directories()}) :: os_directories()
+  defp resolve_os_directories(directories) do
+    os_key =
+      case :os.type() do
+        {:unix, :darwin} -> :macos
+        {:win32, _} -> :windows
+        {:unix, _} -> :linux
+      end
+
+    dirs = Map.get(directories, os_key, %{config: [], logs: [], cache: []})
+
+    Map.new(dirs, fn {kind, paths} ->
+      {kind, Enum.flat_map(paths, &expand_env_vars/1)}
+    end)
+  end
+
+  defp expand_env_vars(<<?#, ?{, rest::binary>>) do
+    case String.split(rest, "}", parts: 2) do
+      [var, suffix] ->
+        value = System.get_env(var) || ""
+        expanded = value <> suffix
+        if expanded != "", do: [expanded], else: []
+
+      _ ->
+        []
+    end
+  end
+
+  defp expand_env_vars(path) do
+    expanded = Path.expand(path)
+    if expanded != "", do: [expanded], else: []
   end
 end

@@ -55,7 +55,7 @@ defmodule AgentEx.ModelRouterTest do
         )
 
       case ModelRouter.resolve_for_context(ctx) do
-        {:ok, routes, analysis} ->
+        {:ok, routes, analysis, _scores} ->
           assert is_list(routes)
 
           if analysis do
@@ -161,7 +161,7 @@ defmodule AgentEx.ModelRouterTest do
         )
 
       case ModelRouter.resolve_for_context(ctx) do
-        {:ok, routes, _analysis} ->
+        {:ok, routes, _analysis, _scores} ->
           assert is_list(routes)
 
           if routes != [] do

@@ -13,6 +13,8 @@ defmodule AgentEx.Tools do
   alias __MODULE__.Memory
   alias __MODULE__.Skill
   alias AgentEx.Subagent.DelegateTask
+  alias AgentEx.Sandbox.PathValidator
+  alias AgentEx.Sandbox.Runner
 
   require Logger
 
@@ -118,7 +120,8 @@ defmodule AgentEx.Tools do
   def execute(tool_name, input, ctx)
       when tool_name in ~w(read_file write_file edit_file bash list_files) do
     workspace = ctx.metadata[:workspace] || ctx.metadata["workspace"]
-    execute_file_tool(tool_name, input, workspace)
+    allowed_roots = ctx.metadata[:allowed_roots] || [workspace]
+    execute_file_tool(tool_name, input, workspace, allowed_roots)
   end
 
   def execute("delegate_task", input, ctx) do
@@ -143,8 +146,8 @@ defmodule AgentEx.Tools do
 
   # ── File Tools ─────────────────────────────────────────────────────
 
-  defp execute_file_tool("read_file", input, workspace) do
-    path = resolve_path(input["path"], workspace)
+  defp execute_file_tool("read_file", input, _workspace, allowed_roots) do
+    path = PathValidator.validate!(input["path"], allowed_roots)
 
     case File.read(path) do
       {:ok, content} ->
@@ -166,10 +169,12 @@ defmodule AgentEx.Tools do
       {:error, reason} ->
         {:error, "Failed to read #{input["path"]}: #{inspect(reason)}"}
     end
+  rescue
+    e in ArgumentError -> {:error, e.message}
   end
 
-  defp execute_file_tool("write_file", input, workspace) do
-    path = resolve_path(input["path"], workspace)
+  defp execute_file_tool("write_file", input, _workspace, allowed_roots) do
+    path = PathValidator.validate!(input["path"], allowed_roots)
     content = input["content"] || ""
 
     with :ok <- File.mkdir_p(Path.dirname(path)),
@@ -179,10 +184,12 @@ defmodule AgentEx.Tools do
       {:error, reason} ->
         {:error, "Failed to write #{input["path"]}: #{inspect(reason)}"}
     end
+  rescue
+    e in ArgumentError -> {:error, e.message}
   end
 
-  defp execute_file_tool("edit_file", input, workspace) do
-    path = resolve_path(input["path"], workspace)
+  defp execute_file_tool("edit_file", input, _workspace, allowed_roots) do
+    path = PathValidator.validate!(input["path"], allowed_roots)
     old_text = input["old_text"]
     new_text = input["new_text"]
 
@@ -213,16 +220,21 @@ defmodule AgentEx.Tools do
       {:error, reason} ->
         {:error, "Failed to read #{input["path"]}: #{inspect(reason)}"}
     end
+  rescue
+    e in ArgumentError -> {:error, e.message}
   end
 
-  defp execute_file_tool("bash", input, workspace) do
+  defp execute_file_tool("bash", input, workspace, allowed_roots) do
     command = input["command"]
     timeout_s = min(input["timeout"] || 60, div(@max_bash_timeout, 1000))
     timeout_ms = timeout_s * 1000
 
+    agent_dirs = allowed_roots -- [workspace]
+    sandboxed_command = Runner.wrap_shell(command, workspace: workspace, agent_dirs: agent_dirs)
+
     try do
       port =
-        Port.open({:spawn, command}, [
+        Port.open({:spawn, sandboxed_command}, [
           :binary,
           :exit_status,
           :use_stdio,
@@ -237,32 +249,25 @@ defmodule AgentEx.Tools do
     end
   end
 
-  defp execute_file_tool("list_files", input, workspace) do
+  defp execute_file_tool("list_files", input, _workspace, allowed_roots) do
     pattern = input["pattern"] || "**/*"
-    full_pattern = Path.join(workspace, pattern)
 
     files =
-      full_pattern
-      |> Path.wildcard()
-      |> Enum.reject(&File.dir?/1)
-      |> Enum.map(&Path.relative_to(&1, workspace))
+      allowed_roots
+      |> Enum.flat_map(fn root ->
+        root
+        |> Path.join(pattern)
+        |> Path.wildcard()
+        |> Enum.reject(&File.dir?/1)
+        |> Enum.map(&Path.relative_to(&1, root))
+      end)
+      |> Enum.uniq()
       |> Enum.sort()
 
     if files == [] do
       {:ok, "No files matching '#{pattern}'"}
     else
       {:ok, Enum.join(files, "\n")}
-    end
-  end
-
-  defp resolve_path(relative_path, workspace) do
-    # Prevent directory traversal
-    clean = Path.expand(Path.join(workspace, relative_path))
-
-    if String.starts_with?(clean, workspace) do
-      clean
-    else
-      raise ArgumentError, "Path traversal detected: #{relative_path}"
     end
   end
 

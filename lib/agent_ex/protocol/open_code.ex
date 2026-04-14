@@ -17,6 +17,8 @@ defmodule AgentEx.Protocol.OpenCode do
 
   use AgentEx.AgentProtocol.CLI
 
+  alias AgentEx.Sandbox.Runner
+
   require Logger
 
   @cli_name "opencode"
@@ -118,13 +120,25 @@ defmodule AgentEx.Protocol.OpenCode do
   def transport_type, do: :local_agent
 
   @impl true
-  def start(backend_config, _ctx) do
+  def start(backend_config, ctx) do
     config = build_config(backend_config)
+
+    workspace = ctx.metadata[:workspace] || File.cwd!()
+    allowed_roots = ctx.metadata[:allowed_roots] || [workspace]
+    agent_dirs = allowed_roots -- [workspace]
+
+    {exe, args, extra_env} =
+      Runner.wrap_executable(
+        :os.find_executable(config[:command]) || config[:command],
+        config[:args] || [],
+        workspace: workspace,
+        agent_dirs: agent_dirs
+      )
 
     port =
       Port.open(
-        {:spawn_executable, :os.find_executable(config[:command]) || config[:command]},
-        [:stream, :binary, :exit_status, {:args, config[:args] || []}]
+        {:spawn_executable, exe},
+        [:stream, :binary, :exit_status, {:args, args} | extra_env]
       )
 
     session_id =
