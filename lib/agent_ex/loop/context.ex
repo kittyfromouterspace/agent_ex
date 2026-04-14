@@ -86,6 +86,9 @@ defmodule AgentEx.Loop.Context do
     # Activation state (from tool gateway)
     activation: %{},
 
+    # Strategy (orchestration layer)
+    strategy: :default,
+
     # Pipeline state (set by stages, threaded through loop iterations)
     last_response: nil,
     pending_tool_calls: [],
@@ -175,6 +178,7 @@ defmodule AgentEx.Loop.Context do
       model_selection_mode: Keyword.get(opts, :model_selection_mode, :manual),
       model_preference: Keyword.get(opts, :model_preference, :optimize_price),
       model_filter: Keyword.get(opts, :model_filter),
+      strategy: Keyword.get(opts, :strategy, :default),
       config: Keyword.get(opts, :config, %__MODULE__{}.config),
       callbacks: Keyword.get(opts, :callbacks, %{})
     }
