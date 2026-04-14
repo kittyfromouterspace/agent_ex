@@ -6,17 +6,20 @@ defmodule AgentEx.Protocol do
 
   - `:llm` - Stateless LLM API calls (OpenAI, Anthropic, etc.)
   - `:local_agent` - Stateful CLI-based local agents (Claude Code, OpenCode)
+  - `:acp` - Agent Client Protocol (JSON-RPC 2.0 over stdio, standardized)
   """
 
-  @type transport_type :: :llm | :local_agent
+  @type transport_type :: :llm | :local_agent | :acp
 
   @doc "Returns a human-readable name for the transport type"
   def transport_type_name(:llm), do: "LLM API"
   def transport_type_name(:local_agent), do: "Local Agent"
+  def transport_type_name(:acp), do: "ACP Agent"
 
   @doc "Returns whether the transport type is session-based"
   def session_based?(:llm), do: false
   def session_based?(:local_agent), do: true
+  def session_based?(:acp), do: true
 end
 
 defmodule AgentEx.Protocol.Error do

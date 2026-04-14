@@ -26,7 +26,7 @@ defmodule AgentEx.Protocol.Registry do
 
   @initial_state %{
     protocols: %{},
-    by_transport: %{llm: [], local_agent: []}
+    by_transport: %{llm: [], local_agent: [], acp: []}
   }
 
   # --- Client API ---
@@ -40,7 +40,7 @@ defmodule AgentEx.Protocol.Registry do
 
   The protocol module must implement `AgentProtocol` behaviour.
   """
-  def register(name, protocol_module) when is_atom(name) do
+  def register(name, protocol_module) when is_atom(name) or is_tuple(name) do
     GenServer.cast(@name, {:register, name, protocol_module})
   end
 
@@ -80,7 +80,7 @@ defmodule AgentEx.Protocol.Registry do
   @doc """
   List all protocols for a given transport type.
   """
-  def for_transport(type) when type in [:llm, :local_agent] do
+  def for_transport(type) when type in [:llm, :local_agent, :acp] do
     GenServer.call(@name, {:for_transport, type})
   end
 

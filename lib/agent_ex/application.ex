@@ -30,10 +30,8 @@ defmodule AgentEx.Application do
   end
 
   defp register_protocols do
-    # Register LLM protocol (wrapper around existing callbacks)
     AgentEx.Protocol.Registry.register(:llm, AgentEx.Protocol.LLM)
 
-    # Register CLI protocols (if available)
     if AgentEx.Protocol.ClaudeCode.available?() do
       AgentEx.Protocol.Registry.register(:claude_code, AgentEx.Protocol.ClaudeCode)
     end
@@ -45,5 +43,24 @@ defmodule AgentEx.Application do
     if AgentEx.Protocol.Codex.available?() do
       AgentEx.Protocol.Registry.register(:codex, AgentEx.Protocol.Codex)
     end
+
+    AgentEx.Protocol.Registry.register({:acp, :generic}, AgentEx.Protocol.ACP)
+
+    register_acp_agents()
+  end
+
+  defp register_acp_agents do
+    agents = Application.get_env(:agent_ex, :acp_agents, [])
+
+    Enum.each(agents, fn agent ->
+      command = agent[:command] || agent["command"]
+      name = agent[:name] || agent["name"]
+
+      if command && name do
+        if System.find_executable(command) do
+          AgentEx.Protocol.Registry.register({:acp, name}, AgentEx.Protocol.ACP)
+        end
+      end
+    end)
   end
 end

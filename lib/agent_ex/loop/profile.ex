@@ -92,6 +92,28 @@ defmodule AgentEx.Loop.Profile do
     stages(:claude_code)
   end
 
+  def stages({:acp, _agent}) do
+    [
+      Stages.ContextGuard,
+      Stages.ProgressInjector,
+      Stages.ACPExecutor,
+      Stages.ModeRouter,
+      Stages.TranscriptRecorder,
+      Stages.CommitmentGate
+    ]
+  end
+
+  def stages(:acp) do
+    [
+      Stages.ContextGuard,
+      Stages.ProgressInjector,
+      Stages.ACPExecutor,
+      Stages.ModeRouter,
+      Stages.TranscriptRecorder,
+      Stages.CommitmentGate
+    ]
+  end
+
   def stages(_), do: stages(:agentic)
 
   @doc "Returns the default config for the given profile."
@@ -218,6 +240,25 @@ defmodule AgentEx.Loop.Profile do
       session_cost_limit_usd: 10.0,
       session_duration_limit_ms: 600_000
     }
+  end
+
+  def config(:acp) do
+    %{
+      max_turns: 50,
+      compaction_at_pct: 0.80,
+      plan_required: false,
+      verify_on_complete: false,
+      progress_injection: :system_reminder,
+      telemetry_prefix: [:agent_ex],
+      protocol: {:acp, :generic},
+      transport_type: :acp,
+      session_cost_limit_usd: 5.0,
+      session_duration_limit_ms: 600_000
+    }
+  end
+
+  def config({:acp, _agent}) do
+    config(:acp)
   end
 
   def config(_), do: config(:agentic)
