@@ -61,13 +61,13 @@ defmodule AgentEx.Telemetry.AggregatorTest do
       :telemetry.execute(
         [:agent_ex, :orchestration, :tool_executed],
         %{duration: 100, output_bytes: 50},
-        %{session_id: "s1", strategy: :default, tool_name: "read_file", success: true}
+        %{session_id: "s1", strategy: :default, mode: :agentic, tool_name: "read_file", success: true}
       )
 
       :telemetry.execute(
         [:agent_ex, :orchestration, :tool_executed],
         %{duration: 200, output_bytes: 0},
-        %{session_id: "s1", strategy: :default, tool_name: "bash", success: false}
+        %{session_id: "s1", strategy: :default, mode: :agentic, tool_name: "bash", success: false}
       )
 
       result = Aggregator.summary(:default, :agentic)
@@ -90,6 +90,28 @@ defmodule AgentEx.Telemetry.AggregatorTest do
       Aggregator.reset()
 
       assert Aggregator.summary(:default) == %{}
+    end
+  end
+
+  describe "tool events with mode" do
+    test "groups tool events by mode" do
+      :telemetry.execute(
+        [:agent_ex, :orchestration, :tool_executed],
+        %{duration: 100, output_bytes: 50},
+        %{session_id: "s1", strategy: :default, mode: :agentic, tool_name: "read_file", success: true}
+      )
+
+      :telemetry.execute(
+        [:agent_ex, :orchestration, :tool_executed],
+        %{duration: 200, output_bytes: 0},
+        %{session_id: "s1", strategy: :default, mode: :conversational, tool_name: "bash", success: true}
+      )
+
+      # Allow async GenServer cast to process
+      Process.sleep(50)
+
+      assert Aggregator.summary(:default, :agentic).tool_call_count == 1
+      assert Aggregator.summary(:default, :conversational).tool_call_count == 1
     end
   end
 end

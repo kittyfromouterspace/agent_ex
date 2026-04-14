@@ -56,25 +56,37 @@ defmodule AgentEx.ModelRouter.Analyzer do
 
     duration = System.monotonic_time() - start_time
 
-    {:ok, analysis} = result
+    case result do
+      {:ok, analysis} ->
+        AgentEx.Telemetry.event(
+          [:model_router, :analysis, :stop],
+          %{duration: duration},
+          %{
+            method: method,
+            session_id: session_id,
+            complexity: analysis.complexity,
+            needs_vision: analysis.needs_vision,
+            needs_audio: analysis.needs_audio,
+            needs_reasoning: analysis.needs_reasoning,
+            needs_large_context: analysis.needs_large_context,
+            estimated_input_tokens: analysis.estimated_input_tokens,
+            required_capabilities: analysis.required_capabilities
+          }
+        )
 
-    AgentEx.Telemetry.event(
-      [:model_router, :analysis, :stop],
-      %{duration: duration},
-      %{
-        method: method,
-        session_id: session_id,
-        complexity: analysis.complexity,
-        needs_vision: analysis.needs_vision,
-        needs_audio: analysis.needs_audio,
-        needs_reasoning: analysis.needs_reasoning,
-        needs_large_context: analysis.needs_large_context,
-        estimated_input_tokens: analysis.estimated_input_tokens,
-        required_capabilities: analysis.required_capabilities
-      }
-    )
+        {:ok, analysis}
 
-    result
+      {:error, reason} ->
+        Logger.warning("ModelRouter.Analyzer: analysis failed: #{inspect(reason)}")
+
+        AgentEx.Telemetry.event(
+          [:model_router, :analysis, :stop],
+          %{duration: duration},
+          %{method: method, session_id: session_id, error: inspect(reason)}
+        )
+
+        {:error, reason}
+    end
   end
 
   defp analyze_via_llm(request, context_summary, llm_chat, session_id) do

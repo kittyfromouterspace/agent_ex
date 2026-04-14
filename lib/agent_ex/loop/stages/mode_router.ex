@@ -117,6 +117,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     text = Helpers.extract_text(content)
     ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
     emit_route_event(ctx, :end_turn, "done")
+    emit_turn_event(ctx, :end_turn)
     {:done, Helpers.result_from_context(ctx)}
   end
 
@@ -146,6 +147,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
 
       {:error, _} ->
         emit_route_event(ctx, :end_turn, "done")
+        emit_turn_event(ctx, :end_turn)
         {:done, Helpers.result_from_context(ctx)}
     end
   end
@@ -159,6 +161,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     text = Helpers.extract_text(content)
     ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
     emit_route_event(ctx, :unknown, "done")
+    emit_turn_event(ctx, :unknown)
     {:done, Helpers.result_from_context(ctx)}
   end
 
@@ -225,6 +228,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
         "ModeRouter: max_turns (#{ctx.config.max_turns}) reached for #{ctx.session_id}"
       )
 
+      emit_turn_event(ctx, :max_turns)
       {:done, Helpers.result_from_context(ctx)}
     else
       next.(ctx)

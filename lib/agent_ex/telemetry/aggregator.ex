@@ -138,7 +138,10 @@ defmodule AgentEx.Telemetry.Aggregator do
   end
 
   defp bump(state, key, field, amount \\ 1) do
-    update_in(state.counts, [Access.key(key, empty_entry()), field], &(&1 + amount))
+    updated_counts =
+      update_in(state.counts, [Access.key(key, empty_entry()), field], &(&1 + amount))
+
+    %{state | counts: updated_counts}
   end
 
   defp empty_entry do

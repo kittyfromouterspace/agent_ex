@@ -146,6 +146,7 @@ defmodule AgentEx.Loop.Context do
           model_preference: :optimize_price | :optimize_speed,
           model_filter: :free_only | nil,
           activation: map(),
+          strategy: atom(),
           last_response: AgentEx.LLM.Response.t() | nil,
           pending_tool_calls: list(map()),
           reentry_pipeline: (t() -> term()) | nil,

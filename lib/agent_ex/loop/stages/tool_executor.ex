@@ -102,7 +102,8 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
         tool_name: name,
         success: not is_error,
         session_id: ctx.session_id,
-        strategy: ctx.strategy
+        strategy: ctx.strategy,
+        mode: ctx.mode
       })
 
       Telemetry.event([:orchestration, :tool_executed], %{
@@ -112,7 +113,8 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
         tool_name: name,
         success: not is_error,
         session_id: ctx.session_id,
-        strategy: ctx.strategy
+        strategy: ctx.strategy,
+        mode: ctx.mode
       })
 
       # Run optional fact extraction callback
