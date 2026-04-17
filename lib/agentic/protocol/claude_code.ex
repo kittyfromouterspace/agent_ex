@@ -24,6 +24,8 @@ defmodule Agentic.Protocol.ClaudeCode do
   @cli_name "claude"
   @default_args [
     "-p",
+    "--input-format",
+    "stream-json",
     "--output-format",
     "stream-json",
     "--include-partial-messages",
@@ -47,6 +49,8 @@ defmodule Agentic.Protocol.ClaudeCode do
   def resume_args,
     do: [
       "-p",
+      "--input-format",
+      "stream-json",
       "--output-format",
       "stream-json",
       "--include-partial-messages",
@@ -249,81 +253,136 @@ defmodule Agentic.Protocol.ClaudeCode do
   # --- Protocol parsing ---
 
   @impl true
-  def parse_stream(chunk) do
-    # Claude Code outputs JSON lines, potentially with partial messages
-    chunk
-    |> String.split("\n", trim: true)
-    |> Enum.reduce(:partial, fn
-      line, acc ->
-        case Jason.decode(line) do
-          {:ok, %{"type" => "content_block_delta", "delta" => delta}} ->
-            # Accumulate partial content
-            {:partial, [delta | acc]}
+  def parse_stream(buffer) do
+    # Claude Code emits one JSON record per line. The shapes we care about:
+    #   %{"type" => "system", ...}                — session state, init, status
+    #   %{"type" => "stream_event", "event" => %{"type" => inner, ...}}
+    #     where `inner` is one of: message_start, content_block_start,
+    #     content_block_delta, content_block_stop, message_delta, message_stop
+    #   %{"type" => "assistant", "message" => %{"content" => [...]}}
+    #   %{"type" => "result", "subtype" => "success" | ...,
+    #     "result" => text, "usage" => usage, "stop_reason" => reason}
+    #   %{"type" => "error", "error" => ...}
+    #
+    # We wait for a terminal `result` record to yield `{:message, ...}`.
+    # The buffer may end in a partial line; undecodable lines are skipped
+    # until the next chunk completes them.
 
-          {:ok, %{"type" => "content_block_stop"}} ->
-            # Complete message
-            content = acc |> elem(1) |> Enum.reverse() |> Enum.map_join("", &(&1["text"] || ""))
-            {:message, %{"content" => content, "type" => "text"}}
+    events = decode_lines(buffer)
 
-          {:ok, %{"type" => "message_start", "message" => message}} ->
-            {:partial, [message]}
+    cond do
+      err = Enum.find(events, &match?(%{"type" => "error"}, &1)) ->
+        {:error, err["error"] || err}
 
-          {:ok, %{"type" => "message_delta", "delta" => delta, "usage" => usage}} ->
-            # End of message with usage
-            content = acc |> elem(1) |> Enum.reverse() |> Enum.map_join("", &(&1["text"] || ""))
+      result = Enum.find(events, &match?(%{"type" => "result"}, &1)) ->
+        build_message(result, events)
 
-            {
-              :message,
-              %{
-                "content" => content,
-                "usage" => usage,
-                "stop_reason" => delta["stop_reason"]
-              }
-            }
+      true ->
+        :partial
+    end
+  end
 
-          {:ok, %{"type" => "error", "error" => error}} ->
-            {:error, error}
-
-          {:ok, %{"type" => type}} when type in ["ping"] ->
-            # Keep reading
-            acc
-
-          _ ->
-            acc
-        end
+  defp decode_lines(buffer) do
+    buffer
+    |> String.split("\n")
+    |> Enum.flat_map(fn line ->
+      case line |> String.trim() |> decode_line() do
+        {:ok, json} -> [json]
+        :skip -> []
+      end
     end)
+  end
+
+  defp decode_line(""), do: :skip
+
+  defp decode_line(line) do
+    case Jason.decode(line) do
+      {:ok, json} -> {:ok, json}
+      {:error, _} -> :skip
+    end
+  end
+
+  defp build_message(result, events) do
+    if result["is_error"] do
+      {:error, result["result"] || result["error"] || "claude cli reported error"}
+    else
+      {:message,
+       %{
+         "content" => extract_text(events, result),
+         "usage" => result["usage"] || %{},
+         "stop_reason" => result["stop_reason"],
+         "total_cost_usd" => result["total_cost_usd"]
+       }}
+    end
+  end
+
+  # Prefer the text baked into the final `assistant` message (authoritative),
+  # then the `result.result` field, then accumulated text_delta chunks.
+  defp extract_text(events, result) do
+    case last_assistant_text(events) do
+      text when is_binary(text) and text != "" -> text
+      _ -> result["result"] || accumulated_deltas(events)
+    end
+  end
+
+  defp last_assistant_text(events) do
+    events
+    |> Enum.filter(&match?(%{"type" => "assistant"}, &1))
+    |> List.last()
+    |> case do
+      nil ->
+        nil
+
+      %{"message" => %{"content" => content}} when is_list(content) ->
+        content
+        |> Enum.flat_map(fn
+          %{"type" => "text", "text" => t} when is_binary(t) -> [t]
+          _ -> []
+        end)
+        |> Enum.join("")
+
+      _ ->
+        nil
+    end
+  end
+
+  defp accumulated_deltas(events) do
+    events
+    |> Enum.flat_map(fn
+      %{"type" => "stream_event", "event" => %{"type" => "content_block_delta", "delta" => delta}} ->
+        case delta do
+          %{"type" => "text_delta", "text" => t} when is_binary(t) -> [t]
+          %{"text" => t} when is_binary(t) -> [t]
+          _ -> []
+        end
+
+      _ ->
+        []
+    end)
+    |> Enum.join("")
   end
 
   @impl true
   def format_messages(messages, _ctx) do
-    # Convert to Claude Code's JSON input format
+    # Claude Code's stream-json input expects one envelope per line, shaped as
+    #   {"type":"user","message":{"role":"user","content":"..."}}
+    # System messages go via --append-system-prompt instead.
     messages
     |> Enum.map(fn
       %{"role" => "system"} ->
-        # Skip system messages - they go via --append-system-prompt
         nil
 
       %{"role" => role, "content" => content} when is_binary(content) ->
-        %{
-          "type" => "message",
-          "role" => role,
-          "content" => [
-            %{
-              "type" => "text",
-              "text" => content
-            }
-          ]
-        }
+        %{"type" => "user", "message" => %{"role" => role, "content" => content}}
+
+      %{"role" => role, "content" => content} when is_list(content) ->
+        %{"type" => "user", "message" => %{"role" => role, "content" => content}}
 
       %{"role" => role} ->
-        %{
-          "type" => "message",
-          "role" => role,
-          "content" => [%{"type" => "text", "text" => ""}]
-        }
+        %{"type" => "user", "message" => %{"role" => role, "content" => ""}}
     end)
     |> Enum.reject(&is_nil/1)
-    |> Jason.encode!()
+    |> Enum.map_join("\n", &Jason.encode!/1)
   end
 
   # --- Session state management ---
@@ -379,9 +438,21 @@ defmodule Agentic.Protocol.ClaudeCode do
     end
   end
 
-  defp extract_tool_calls(_buffer) do
-    # Claude Code tool calls come as separate message types
-    # Would need to parse tool_use blocks from the buffer
-    []
+  defp extract_tool_calls(buffer) do
+    buffer
+    |> decode_lines()
+    |> Enum.filter(&match?(%{"type" => "assistant"}, &1))
+    |> List.last()
+    |> case do
+      %{"message" => %{"content" => content}} when is_list(content) ->
+        content
+        |> Enum.filter(&match?(%{"type" => "tool_use"}, &1))
+        |> Enum.map(fn %{"id" => id, "name" => name} = tu ->
+          %{"id" => id, "name" => name, "input" => tu["input"] || %{}}
+        end)
+
+      _ ->
+        []
+    end
   end
 end

@@ -52,13 +52,36 @@ defmodule Agentic.LLM.Gateway do
 
   @doc """
   Injects gateway environment variables into a coding agent's env map.
+
+  Only injects when (1) a gateway base URL is configured and (2) credentials
+  are actually resolvable for the provider. Without credentials the gateway
+  would 401 every request, so we leave the CLI to use its own auth (e.g.
+  Claude Code's OAuth session) by talking to the real provider directly.
   """
   @spec inject_env(map(), provider_id()) :: map()
   def inject_env(env_map, provider_id) do
-    case base_url(provider_id) do
-      nil -> env_map
-      url -> Map.put(env_map, env_var_name(provider_id), url)
+    with url when is_binary(url) <- base_url(provider_id),
+         true <- provider_configured?(provider_id) do
+      Map.put(env_map, env_var_name(provider_id), url)
+    else
+      _ -> env_map
     end
+  end
+
+  defp provider_configured?(provider_id) do
+    case resolve_provider_safe(provider_id) do
+      nil ->
+        false
+
+      provider ->
+        match?({:ok, _}, Credentials.resolve(provider))
+    end
+  end
+
+  defp resolve_provider_safe(provider_id) do
+    resolve_provider(provider_id)
+  rescue
+    _ -> nil
   end
 
   defp env_var_name(:anthropic), do: "ANTHROPIC_BASE_URL"

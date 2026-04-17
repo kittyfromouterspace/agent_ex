@@ -330,10 +330,18 @@ defmodule Agentic.Protocol.ACP.Session do
   defp maybe_authenticate(_session, []), do: :ok
 
   defp maybe_authenticate(session, [_method | _rest] = methods) do
-    Logger.info("ACP agent requires authentication, methods: #{inspect(methods)}")
+    Logger.info("ACP agent advertised authentication methods: #{inspect(methods)}")
 
-    if auth_method = List.first(methods) do
-      params = %{"methodId" => auth_method["id"]}
+    # Agents like opencode, kimi, and gemini advertise terminal-only auth flows
+    # (e.g. "Run `opencode auth login`"). Those can't be driven over the
+    # ACP `authenticate` RPC — they're reference instructions for the user.
+    # For any method that isn't clearly programmatic, skip the call and let
+    # `newSession` succeed if the CLI's on-disk credentials are sufficient,
+    # or fail with a legible error that we propagate up.
+    programmatic = Enum.find(methods, &programmatic_auth_method?/1)
+
+    if programmatic do
+      params = %{"methodId" => programmatic["id"]}
 
       case Agentic.Protocol.ACP.Client.request(session.client, "authenticate", params,
              timeout: 10_000
@@ -344,6 +352,21 @@ defmodule Agentic.Protocol.ACP.Session do
     else
       :ok
     end
+  end
+
+  defp programmatic_auth_method?(method) do
+    # A "terminal" hint in `_meta` or a description asking the user to run
+    # something in their shell indicates an interactive, out-of-band flow.
+    terminal_meta =
+      case method["_meta"] do
+        %{} = meta -> Enum.any?(Map.values(meta), &match?(%{"type" => "terminal"}, &1))
+        _ -> false
+      end
+
+    description = method["description"] || ""
+    interactive_hint = Regex.match?(~r/terminal|run `/i, description)
+
+    not (terminal_meta or interactive_hint)
   end
 
   defp create_session(session) do

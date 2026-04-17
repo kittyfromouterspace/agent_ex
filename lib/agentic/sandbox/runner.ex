@@ -74,14 +74,86 @@ defmodule Agentic.Sandbox.Runner do
 
   defp bwrap_shell(command, workspace, agent_dirs) do
     bwrap = bwrap_executable()
-    args = bwrap_args(workspace, agent_dirs)
+    args = bwrap_args(workspace, agent_dirs, network: :block)
     "#{bwrap} #{args} -- /bin/sh -c #{shell_escape(command)}"
   end
 
   defp bwrap_executable(executable, args, workspace, agent_dirs) do
     bwrap = bwrap_executable()
-    bwrap_args_list = bwrap_args_list(workspace, agent_dirs)
+
+    bwrap_args_list =
+      bwrap_args_list(workspace, agent_dirs, network: :allow) ++
+        executable_bind_args(executable)
+
     {bwrap, bwrap_args_list ++ ["--", executable] ++ args, []}
+  end
+
+  # Bind-mount the executable's path (and any symlink targets it resolves to)
+  # so bwrap can exec it from inside the sandbox. This covers CLIs installed
+  # under user-local prefixes like ~/.local/bin, ~/.npm-global/bin, nvm, asdf, etc.
+  defp executable_bind_args(executable) when is_binary(executable) do
+    chain = symlink_chain(executable, [])
+
+    parents =
+      chain
+      |> Enum.map(&Path.dirname/1)
+      |> Enum.uniq()
+      |> Enum.reject(&bwrap_base_bound?/1)
+
+    tool_manager_roots =
+      chain
+      |> Enum.flat_map(&tool_manager_root/1)
+      |> Enum.uniq()
+      |> Enum.reject(&bwrap_base_bound?/1)
+
+    (parents ++ tool_manager_roots)
+    |> Enum.uniq()
+    |> Enum.flat_map(fn dir -> ["--ro-bind-try", dir, dir] end)
+  end
+
+  defp executable_bind_args(executable) when is_list(executable),
+    do: executable_bind_args(List.to_string(executable))
+
+  defp executable_bind_args(_), do: []
+
+  # Detect version-manager layouts (asdf, mise, nvm, rbenv, ...). Shims live
+  # in `$ROOT/shims/` but dispatch into `$ROOT/installs/...`, so binding just
+  # the shim directory isn't enough — we need the whole manager tree.
+  @tool_managers ~w(.asdf .mise .nvm .rbenv .pyenv .nodenv .jenv)
+  defp tool_manager_root(path) do
+    Enum.find_value(@tool_managers, [], fn name ->
+      marker = "/" <> name <> "/"
+
+      case String.split(path, marker, parts: 2) do
+        [prefix, _] -> [prefix <> "/" <> name]
+        _ -> nil
+      end
+    end)
+  end
+
+  defp symlink_chain(_path, acc) when length(acc) > 16, do: Enum.reverse(acc)
+
+  defp symlink_chain(path, acc) do
+    acc = [path | acc]
+
+    case File.read_link(path) do
+      {:ok, target} ->
+        resolved =
+          if Path.type(target) == :absolute,
+            do: target,
+            else: Path.expand(target, Path.dirname(path))
+
+        if resolved in acc, do: Enum.reverse(acc), else: symlink_chain(resolved, acc)
+
+      _ ->
+        Enum.reverse(acc)
+    end
+  end
+
+  defp bwrap_base_bound?(dir) do
+    Enum.any?(["/usr", "/bin", "/lib", "/lib64", "/etc"], fn base ->
+      dir == base or String.starts_with?(dir, base <> "/")
+    end)
   end
 
   defp bwrap_executable do
@@ -117,11 +189,31 @@ defmodule Agentic.Sandbox.Runner do
     end
   end
 
-  defp bwrap_args(workspace, agent_dirs) do
-    bwrap_args_list(workspace, agent_dirs) |> Enum.map_join(" ", &shell_escape/1)
+  defp bwrap_args(workspace, agent_dirs, opts) do
+    bwrap_args_list(workspace, agent_dirs, opts) |> Enum.map_join(" ", &shell_escape/1)
   end
 
-  defp bwrap_args_list(workspace, agent_dirs) do
+  defp bwrap_args_list(workspace, agent_dirs, opts) do
+    network = Keyword.get(opts, :network, :block)
+
+    # `--unshare-all` unshares the network namespace too, which breaks
+    # agent CLIs that need API access. When network: :allow is requested,
+    # we unshare every namespace except net.
+    unshare_flags =
+      case network do
+        :block ->
+          ["--unshare-all"]
+
+        :allow ->
+          [
+            "--unshare-user",
+            "--unshare-pid",
+            "--unshare-uts",
+            "--unshare-ipc",
+            "--unshare-cgroup-try"
+          ]
+      end
+
     base =
       [
         "--ro-bind",
@@ -146,20 +238,21 @@ defmodule Agentic.Sandbox.Runner do
         "--tmpfs",
         "/tmp",
         "--dir",
-        "/run",
-        "--unshare-all",
-        "--die-with-parent",
-        "--chdir",
-        "/workspace"
+        "/run"
       ] ++
+        unshare_flags ++
+        [
+          "--die-with-parent",
+          "--chdir",
+          "/workspace"
+        ] ++
         bind_args(workspace, "/workspace", :rw)
 
+    # Agent private dirs (config/cache/logs) are bound at their original
+    # host paths so the CLI's own `$HOME/...` lookups resolve correctly.
     agent_binds =
       agent_dirs
-      |> Enum.with_index()
-      |> Enum.flat_map(fn {dir, idx} ->
-        bind_args(dir, "/agent/dir#{idx}", :rw)
-      end)
+      |> Enum.flat_map(fn dir -> bind_args(dir, dir, :rw) end)
 
     base ++ agent_binds
   end
@@ -180,14 +273,21 @@ defmodule Agentic.Sandbox.Runner do
   defp wsl2_bwrap_shell(command, workspace, agent_dirs) do
     ws_wsl = windows_to_wsl_path(workspace)
     dirs_wsl = Enum.map(agent_dirs, &windows_to_wsl_path/1)
-    args = bwrap_args_list(ws_wsl, dirs_wsl) |> Enum.map_join(" ", &shell_escape/1)
+
+    args =
+      bwrap_args_list(ws_wsl, dirs_wsl, network: :block)
+      |> Enum.map_join(" ", &shell_escape/1)
+
     "wsl.exe -- bwrap #{args} --chdir /workspace -- /bin/sh -c #{shell_escape(command)}"
   end
 
   defp wsl2_bwrap_executable(executable, args, workspace, agent_dirs) do
     ws_wsl = windows_to_wsl_path(workspace)
     dirs_wsl = Enum.map(agent_dirs, &windows_to_wsl_path/1)
-    bwrap_args_list = bwrap_args_list(ws_wsl, dirs_wsl)
+
+    bwrap_args_list =
+      bwrap_args_list(ws_wsl, dirs_wsl, network: :allow) ++
+        executable_bind_args(executable)
 
     {"wsl.exe",
      ["--", "bwrap"] ++ bwrap_args_list ++ ["--chdir", "/workspace", "--", executable] ++ args,

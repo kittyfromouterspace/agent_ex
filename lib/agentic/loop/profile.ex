@@ -240,9 +240,9 @@ defmodule Agentic.Loop.Profile do
       transport_type: :local_agent,
       cli_config: %{
         command: "codex",
-        args: ["--json"],
-        session_mode: :always,
-        session_id_fields: ["session_id"]
+        # One-shot mode: each turn spawns `codex exec --json`.
+        args: ["exec", "--json", "--skip-git-repo-check"],
+        session_mode: :none
       },
       session_cost_limit_usd: 10.0,
       session_duration_limit_ms: 600_000
