@@ -1,31 +1,31 @@
-# Persistence Strategy — AgentEx Multi-Mode Loop
+# Persistence Strategy — Agentic Multi-Mode Loop
 
-> Companion to [Main Proposal](./multi-mode-loop-proposal.md). Defines persistence behaviours, Mneme integration, and host application integration guide.
+> Companion to [Main Proposal](./multi-mode-loop-proposal.md). Defines persistence behaviours, Recollect integration, and host application integration guide.
 
 ---
 
 ## 1. Current State
 
-AgentEx has **no database**. The `ecto_sql` and `postgrex` entries in `mix.exs` are declared but never used — no Repo module, no schemas, no migrations, no Ecto imports anywhere in the codebase. All storage is filesystem-backed via a clean delegation pattern:
+Agentic has **no database**. The `ecto_sql` and `postgrex` entries in `mix.exs` are declared but never used — no Repo module, no schemas, no migrations, no Ecto imports anywhere in the codebase. All storage is filesystem-backed via a clean delegation pattern:
 
 ```
-AgentEx.Storage.Context  (facade — resolves backend by atom, delegates all ops)
-    └── AgentEx.Storage.Local  (concrete — pure File.* calls, zero deps)
+Agentic.Storage.Context  (facade — resolves backend by atom, delegates all ops)
+    └── Agentic.Storage.Local  (concrete — pure File.* calls, zero deps)
 ```
 
-The backend contract (8 functions: `read`, `write`, `exists?`, `dir?`, `ls`, `rm_rf`, `mkdir_p`, `materialize_local`) is enforced by convention, not a `@behaviour`. See `lib/agent_ex/storage/context.ex` and `lib/agent_ex/storage/local.ex`.
+The backend contract (8 functions: `read`, `write`, `exists?`, `dir?`, `ls`, `rm_rf`, `mkdir_p`, `materialize_local`) is enforced by convention, not a `@behaviour`. See `lib/agentic/storage/context.ex` and `lib/agentic/storage/local.ex`.
 
 ---
 
 ## 2. Decision: Behaviour-Based Persistence, Not Ash
 
-**AgentEx will NOT depend on Ash (or Ecto) directly.** Instead, it defines persistence behaviours and ships filesystem-backed defaults. Host applications provide implementations backed by their own infrastructure (Ash, Ecto, or anything else).
+**Agentic will NOT depend on Ash (or Ecto) directly.** Instead, it defines persistence behaviours and ships filesystem-backed defaults. Host applications provide implementations backed by their own infrastructure (Ash, Ecto, or anything else).
 
 **Rationale:**
 
-1. **AgentEx is a library, not an application.** Ash + ash_postgres + PostgreSQL is a heavy requirement to impose on every consumer.
-2. **The pattern is proven.** Homunculus's `DataAccess` behaviour (~80 callbacks) demonstrates that the agent runtime stays clean while the host provides heavy infrastructure. AgentEx's existing `Storage.Context` already does this for storage operations.
-3. **No shared resource shapes.** The host projects' Ash resources (User, Workspace, etc.) are application-level, not agent-runtime resources. AgentEx's needs (plans, transcripts, knowledge entries) are structurally different.
+1. **Agentic is a library, not an application.** Ash + ash_postgres + PostgreSQL is a heavy requirement to impose on every consumer.
+2. **The pattern is proven.** Homunculus's `DataAccess` behaviour (~80 callbacks) demonstrates that the agent runtime stays clean while the host provides heavy infrastructure. Agentic's existing `Storage.Context` already does this for storage operations.
+3. **No shared resource shapes.** The host projects' Ash resources (User, Workspace, etc.) are application-level, not agent-runtime resources. Agentic's needs (plans, transcripts, knowledge entries) are structurally different.
 
 ---
 
@@ -40,13 +40,13 @@ Both integration targets use **Ash Framework** extensively:
 | Agent-to-DB coupling | **Decoupled** via `DataAccess` behaviour | **Direct** — 101 `Ash.Changeset` call sites |
 | Ash config block | Identical to SCE | Identical to homunculus |
 
-Key: **Homunculus already decouples its agent runtime from Ash.** The `homunculus_agent` app never imports Ash. This is the proven pattern for AgentEx.
+Key: **Homunculus already decouples its agent runtime from Ash.** The `homunculus_agent` app never imports Ash. This is the proven pattern for Agentic.
 
 ---
 
 ## 4. Behaviour Definitions
 
-### 4.1 `AgentEx.Storage.Backend` (formalize existing contract)
+### 4.1 `Agentic.Storage.Backend` (formalize existing contract)
 
 Extracts the implicit 8-function contract from `Storage.Local` into a formal `@behaviour`:
 
@@ -73,15 +73,15 @@ Extracts the implicit 8-function contract from `Storage.Local` into a formal `@b
   {:ok, String.t()} | {:error, term()}
 ```
 
-`AgentEx.Storage.Local` becomes the reference `@behaviour` implementation. `Storage.Context` gains compile-time enforcement.
+`Agentic.Storage.Local` becomes the reference `@behaviour` implementation. `Storage.Context` gains compile-time enforcement.
 
 ---
 
-### 4.2 `AgentEx.Persistence.Transcript`
+### 4.2 `Agentic.Persistence.Transcript`
 
 **Addresses:** Enhancement E4 (Full Transcript and Session Resumption)
 
-Append-only session event log. The `:local` implementation writes JSONL files to `<workspace>/.agent_ex/sessions/<session_id>.jsonl`.
+Append-only session event log. The `:local` implementation writes JSONL files to `<workspace>/.agentic/sessions/<session_id>.jsonl`.
 
 ```elixir
 @callback append(session_id :: String.t(), event :: map(), opts :: keyword()) ::
@@ -105,19 +105,19 @@ Event format (one JSON object per line):
 {"type":"phase_transition","turn":3,"data":{"from":"plan","to":"execute"},"timestamp":"..."}
 ```
 
-Session resumption: `AgentEx.resume/1` loads the transcript, reconstructs the compact conversation, and starts the pipeline with `ctx.turns_used` set to the transcript length. Plan state is serialized into the transcript so it survives resumption.
+Session resumption: `Agentic.resume/1` loads the transcript, reconstructs the compact conversation, and starts the pipeline with `ctx.turns_used` set to the transcript length. Plan state is serialized into the transcript so it survives resumption.
 
 **Files:**
-- `lib/agent_ex/persistence/transcript.ex` — behaviour definition
-- `lib/agent_ex/persistence/transcript/local.ex` — JSONL file backend
+- `lib/agentic/persistence/transcript.ex` — behaviour definition
+- `lib/agentic/persistence/transcript/local.ex` — JSONL file backend
 
 ---
 
-### 4.3 `AgentEx.Persistence.Plan`
+### 4.3 `Agentic.Persistence.Plan`
 
 **Addresses:** PlanBuilder (§5.2), PlanTracker (§5.3), Plan Structure (§8)
 
-CRUD for structured plans with step-level status tracking. The `:local` implementation stores JSON files at `<workspace>/.agent_ex/plans/<plan_id>.json`.
+CRUD for structured plans with step-level status tracking. The `:local` implementation stores JSON files at `<workspace>/.agentic/plans/<plan_id>.json`.
 
 ```elixir
 @callback create(plan :: plan_struct(), opts :: keyword()) ::
@@ -134,16 +134,16 @@ CRUD for structured plans with step-level status tracking. The `:local` implemen
 ```
 
 **Files:**
-- `lib/agent_ex/persistence/plan.ex` — behaviour definition
-- `lib/agent_ex/persistence/plan/local.ex` — JSON file backend
+- `lib/agentic/persistence/plan.ex` — behaviour definition
+- `lib/agentic/persistence/plan/local.ex` — JSON file backend
 
 ---
 
-### 4.4 `AgentEx.Persistence.Knowledge`
+### 4.4 `Agentic.Persistence.Knowledge`
 
 **Addresses:** ContextKeeper durable persistence, working memory fact storage
 
-**Mneme is the preferred knowledge store.** It is already a declared dependency of AgentEx (`mix.exs` line 31) and lives at `../mneme`. Mneme provides:
+**Recollect is the preferred knowledge store.** It is already a declared dependency of Agentic (`mix.exs` line 31) and lives at `../recollect`. Recollect provides:
 
 - Tier 2 API: `remember/2`, `forget/1`, `connect/4`, `search/2` — maps almost directly onto this behaviour
 - Hybrid vector + graph search with configurable hops
@@ -152,7 +152,7 @@ CRUD for structured plans with step-level status tracking. The `:local` implemen
 - Memory decay for stale entries
 - Fact supersession via confidence demotion
 
-The `:mneme` backend delegates to Mneme directly. The `:local` fallback uses file-based storage for lightweight/no-DB scenarios.
+The `:recollect` backend delegates to Recollect directly. The `:local` fallback uses file-based storage for lightweight/no-DB scenarios.
 
 ```elixir
 @callback search(query :: String.t(), opts :: keyword()) ::
@@ -200,50 +200,50 @@ Types:
 }
 ```
 
-Behaviour-to-Mneme API mapping:
+Behaviour-to-Recollect API mapping:
 
-| Behaviour callback | Mneme equivalent |
+| Behaviour callback | Recollect equivalent |
 |---|---|
-| `create_entry/2` | `Mneme.remember/2` |
-| `search/2` | `Mneme.search/2` (hybrid vector + graph) |
-| `get_entry/2` | `Mneme.Knowledge.recent/2` (by scope) |
-| `get_edges/3` | `Mneme.GraphStore.impl().get_relations/2` |
-| `create_edge/4` | `Mneme.connect/4` |
-| `recent/2` | `Mneme.Knowledge.recent/2` |
-| `supersede/4` | `Mneme.Knowledge.supersede/4` |
+| `create_entry/2` | `Recollect.remember/2` |
+| `search/2` | `Recollect.search/2` (hybrid vector + graph) |
+| `get_entry/2` | `Recollect.Knowledge.recent/2` (by scope) |
+| `get_edges/3` | `Recollect.GraphStore.impl().get_relations/2` |
+| `create_edge/4` | `Recollect.connect/4` |
+| `recent/2` | `Recollect.Knowledge.recent/2` |
+| `supersede/4` | `Recollect.Knowledge.supersede/4` |
 
-The `:mneme` backend ships as `lib/agent_ex/persistence/knowledge/mneme.ex`:
+The `:recollect` backend ships as `lib/agentic/persistence/knowledge/recollect.ex`:
 
 ```elixir
-defmodule AgentEx.Persistence.Knowledge.Mneme do
-  @behaviour AgentEx.Persistence.Knowledge
+defmodule Agentic.Persistence.Knowledge.Recollect do
+  @behaviour Agentic.Persistence.Knowledge
 
   @impl true
-  def search(query, opts), do: Mneme.search(query, opts)
+  def search(query, opts), do: Recollect.search(query, opts)
 
   @impl true
   def create_entry(entry, opts) do
-    Mneme.remember(entry.content, opts)
+    Recollect.remember(entry.content, opts)
   end
 
   @impl true
-  def recent(scope_id, opts), do: Mneme.Knowledge.recent(scope_id, opts)
+  def recent(scope_id, opts), do: Recollect.Knowledge.recent(scope_id, opts)
 
   @impl true
   def create_edge(from_id, to_id, relation, opts) do
-    Mneme.connect(from_id, to_id, relation, opts)
+    Recollect.connect(from_id, to_id, relation, opts)
   end
 
   @impl true
   def get_edges(entry_id, _direction, opts) do
     owner_id = Keyword.get(opts, :owner_id)
-    Mneme.GraphStore.impl().get_relations(owner_id, entry_id)
+    Recollect.GraphStore.impl().get_relations(owner_id, entry_id)
   end
 
   @impl true
   def get_entry(entry_id, opts) do
     scope_id = Keyword.get(opts, :scope_id)
-    case Mneme.Knowledge.recent(scope_id, limit: 100) do
+    case Recollect.Knowledge.recent(scope_id, limit: 100) do
       {:ok, entries} ->
         case Enum.find(entries, &(&1.id == entry_id)) do
           nil -> {:error, :not_found}
@@ -255,14 +255,14 @@ defmodule AgentEx.Persistence.Knowledge.Mneme do
 
   @impl true
   def supersede(scope_id, entity, relation, new_value) do
-    Mneme.Knowledge.supersede(scope_id, entity, relation, new_value)
+    Recollect.Knowledge.supersede(scope_id, entity, relation, new_value)
   end
 end
 ```
 
-The `:local` fallback ships as `lib/agent_ex/persistence/knowledge/local.ex` using a JSONL index file at `<workspace>/.agent_ex/knowledge.jsonl`.
+The `:local` fallback ships as `lib/agentic/persistence/knowledge/local.ex` using a JSONL index file at `<workspace>/.agentic/knowledge.jsonl`.
 
-**Host integration:** Homunculus already has `MnemeBridge` that calls into Mneme. SCE would need a similar adapter. Both projects provide the Mneme repo config, and the `:mneme` backend works without additional setup.
+**Host integration:** Homunculus already has `RecollectBridge` that calls into Recollect. SCE would need a similar adapter. Both projects provide the Recollect repo config, and the `:recollect` backend works without additional setup.
 
 ---
 
@@ -272,15 +272,15 @@ Extend the existing `Storage.Context` resolution to cover all four behaviours:
 
 ```elixir
 # In config or at runtime:
-AgentEx.configure(
+Agentic.configure(
   storage: %{
-    backend: AgentEx.Storage.Local,
+    backend: Agentic.Storage.Local,
     config: %{root: "/path/to/workspace"}
   },
   persistence: %{
-    transcript: {AgentEx.Persistence.Transcript.Local, %{}},
-    plan: {AgentEx.Persistence.Plan.Local, %{}},
-    knowledge: {AgentEx.Persistence.Knowledge.Mneme, %{}}
+    transcript: {Agentic.Persistence.Transcript.Local, %{}},
+    plan: {Agentic.Persistence.Plan.Local, %{}},
+    knowledge: {Agentic.Persistence.Knowledge.Recollect, %{}}
   }
 )
 ```
@@ -297,8 +297,8 @@ For a host application already using Ash (like homunculus or SCE), the integrati
 2. **Implement the behaviour module** with Ash-backed CRUD:
 
 ```elixir
-defmodule MyApp.AgentEx.AshTranscript do
-  @behaviour AgentEx.Persistence.Transcript
+defmodule MyApp.Agentic.AshTranscript do
+  @behaviour Agentic.Persistence.Transcript
 
   @impl true
   def append(session_id, event, _opts) do
@@ -315,9 +315,9 @@ defmodule MyApp.AgentEx.AshTranscript do
 end
 ```
 
-3. **Wire in config** when calling `AgentEx.run/1`
+3. **Wire in config** when calling `Agentic.run/1`
 
-This mirrors how `homunculus_agent`'s `AgentExCallbacks` bridges to Ash today — the agent runtime stays clean, the host provides the implementation.
+This mirrors how `homunculus_agent`'s `AgenticCallbacks` bridges to Ash today — the agent runtime stays clean, the host provides the implementation.
 
 ---
 
@@ -325,8 +325,8 @@ This mirrors how `homunculus_agent`'s `AgentExCallbacks` bridges to Ash today �
 
 | Package | Current | Proposed | Reason |
 |---|---|---|---|
-| `ecto_sql` | Declared, unused | **Keep** | Required by mneme |
-| `postgrex` | Declared, unused | **Keep** | Required by mneme |
-| `mneme` | Declared (GitHub) | **Keep** | Preferred knowledge store |
-| `ash` | Not present | **Not added** | AgentEx stays decoupled |
+| `ecto_sql` | Declared, unused | **Keep** | Required by recollect |
+| `postgrex` | Declared, unused | **Keep** | Required by recollect |
+| `recollect` | Declared (GitHub) | **Keep** | Preferred knowledge store |
+| `ash` | Not present | **Not added** | Agentic stays decoupled |
 | `jason` | Required | **Keep** | JSONL serialization |

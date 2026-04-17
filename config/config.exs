@@ -1,16 +1,16 @@
 import Config
 
-config :agent_ex,
-  telemetry_prefix: [:agent_ex],
+config :agentic,
+  telemetry_prefix: [:agentic],
   providers: [
-    AgentEx.LLM.Provider.Anthropic,
-    AgentEx.LLM.Provider.OpenAI,
-    AgentEx.LLM.Provider.OpenRouter,
-    AgentEx.LLM.Provider.Groq,
-    AgentEx.LLM.Provider.Ollama
+    Agentic.LLM.Provider.Anthropic,
+    Agentic.LLM.Provider.OpenAI,
+    Agentic.LLM.Provider.OpenRouter,
+    Agentic.LLM.Provider.Groq,
+    Agentic.LLM.Provider.Ollama
   ],
   catalog: [
-    persist_path: "~/.worth/catalog.json",
+    persist_path: "~/.agentic/catalog.json",
     refresh_interval_ms: 600_000
   ]
 

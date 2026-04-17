@@ -14,14 +14,14 @@
 ## V1.0 — COMPLETE
 
 ### Phase 1: Core Infrastructure
-- [x] Phase state machine (`lib/agent_ex/loop/phase.ex`)
-- [x] Context fields (`lib/agent_ex/loop/context.ex`)
-- [x] ModeRouter (`lib/agent_ex/loop/stages/mode_router.ex`)
-- [x] PlanBuilder (`lib/agent_ex/loop/stages/plan_builder.ex`)
-- [x] PlanTracker (`lib/agent_ex/loop/stages/plan_tracker.ex`)
-- [x] HumanCheckpoint (`lib/agent_ex/loop/stages/human_checkpoint.ex`)
-- [x] VerifyPhase (`lib/agent_ex/loop/stages/verify_phase.ex`)
-- [x] WorkspaceSnapshot (`lib/agent_ex/loop/stages/workspace_snapshot.ex`)
+- [x] Phase state machine (`lib/agentic/loop/phase.ex`)
+- [x] Context fields (`lib/agentic/loop/context.ex`)
+- [x] ModeRouter (`lib/agentic/loop/stages/mode_router.ex`)
+- [x] PlanBuilder (`lib/agentic/loop/stages/plan_builder.ex`)
+- [x] PlanTracker (`lib/agentic/loop/stages/plan_tracker.ex`)
+- [x] HumanCheckpoint (`lib/agentic/loop/stages/human_checkpoint.ex`)
+- [x] VerifyPhase (`lib/agentic/loop/stages/verify_phase.ex`)
+- [x] WorkspaceSnapshot (`lib/agentic/loop/stages/workspace_snapshot.ex`)
 
 ### Phase 2: Profile & Entry Point
 - [x] Profile updates (4 profiles)
@@ -57,7 +57,7 @@
 - [x] ContinuationDetector port from Homunculus (20 tests)
 - [x] ContextCompression two-tier truncate/summarize port from Homunculus (8 tests)
 - [x] LLMSemaphore bounded concurrency port from SCE (7 tests)
-- [-] Mneme Knowledge backend (deferred — requires Mneme DB)
+- [-] Recollect Knowledge backend (deferred — requires Recollect DB)
 
 ---
 
@@ -73,11 +73,11 @@
 
 ## V1.3 — COMPLETE
 
-- [x] TranscriptRecorder stage (`lib/agent_ex/loop/stages/transcript_recorder.ex`)
+- [x] TranscriptRecorder stage (`lib/agentic/loop/stages/transcript_recorder.ex`)
 - [x] Records `llm_response` and `tool_call` events via transcript backend
 - [x] No-op when no `transcript_backend` callback configured
 - [x] Added to all 4 profiles (after ModeRouter)
-- [x] `AgentEx.resume/1` with transcript reconstruction
+- [x] `Agentic.resume/1` with transcript reconstruction
 - [x] Rebuilds messages, turns_used, cost, tokens, plan from JSONL events
 - [x] TranscriptRecorder tests (5 tests)
 - [x] Resume tests (3 tests)
@@ -87,9 +87,9 @@
 ## V2.0 — COMPLETE
 
 - [x] Context fields: `subagent_depth`, `subagent_budget`, `parent_session_id`
-- [x] `AgentEx.Subagent.Coordinator` GenServer (per-workspace, Registry-backed)
-- [x] `AgentEx.Subagent.CoordinatorSupervisor` (DynamicSupervisor, lazy start)
-- [x] `AgentEx.Subagent.DelegateTask` tool definition + execution
+- [x] `Agentic.Subagent.Coordinator` GenServer (per-workspace, Registry-backed)
+- [x] `Agentic.Subagent.CoordinatorSupervisor` (DynamicSupervisor, lazy start)
+- [x] `Agentic.Subagent.DelegateTask` tool definition + execution
 - [x] `delegate_task` tool wired into `Tools.definitions/0` and `Tools.execute/3`
 - [x] Max concurrent subagents: 5 per workspace
 - [x] Max subagent nesting depth: 3
@@ -105,14 +105,14 @@
 - [x] `tool_permissions` context field (`%{tool_name => :auto | :approve | :deny}`)
 - [x] `:on_tool_approval` callback (`(name, input, ctx) -> :approved | :denied | {:approved_with_changes, new_input}`)
 - [x] Permission check in ToolExecutor before circuit breaker
-- [x] Wired `tool_permissions` option in `AgentEx.run/1`
+- [x] Wired `tool_permissions` option in `Agentic.run/1`
 - [x] Tool permission tests (8 tests)
 
 ---
 
 ## Future
 
-- Mneme Knowledge backend (deferred — requires Mneme DB)
+- Recollect Knowledge backend (deferred — requires Recollect DB)
 - Async subagent execution (V3.0)
 - Mode switching mid-run
 - Per-tool approval gating with runtime approval flow for `:turn_by_turn`

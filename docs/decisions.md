@@ -6,7 +6,7 @@
 
 ## D001: Phase State Machine — Pure Module vs gen_statem
 - **Date:** 2026-04-06
-- **Decision:** Use a lightweight pure-function module (`AgentEx.Loop.Phase`) with map-based transition tables. No external dependencies.
+- **Decision:** Use a lightweight pure-function module (`Agentic.Loop.Phase`) with map-based transition tables. No external dependencies.
 - **Rationale:** The state threads through stage functions, not a long-lived GenServer. Process-based FSMs like `gen_statem` are architecturally wrong here. The `fsm` library author's own advice: "regular data structures with pattern matching in multiclauses will serve you just fine."
 - **Alternatives:** `gen_statem`, `fsm` library, `machinery` library
 - **Source:** multi-mode-loop-proposal.md §3.2
@@ -39,8 +39,8 @@
 
 ## D005: Persistence via Behaviours, Not Ash/Ecto
 - **Date:** 2026-04-06
-- **Decision:** Define persistence behaviours and ship filesystem-backed defaults. AgentEx does NOT depend on Ash or Ecto directly.
-- **Rationale:** AgentEx is a library, not an application. Ash + ash_postgres + PostgreSQL is too heavy a requirement for every consumer. The pattern is proven by Homunculus's `DataAccess` behaviour.
+- **Decision:** Define persistence behaviours and ship filesystem-backed defaults. Agentic does NOT depend on Ash or Ecto directly.
+- **Rationale:** Agentic is a library, not an application. Ash + ash_postgres + PostgreSQL is too heavy a requirement for every consumer. The pattern is proven by Homunculus's `DataAccess` behaviour.
 - **Source:** persistence-strategy.md §2
 
 ---
@@ -163,7 +163,7 @@
 
 ## D020: Resume Reconstructs Messages from Events
 - **Date:** 2026-04-06
-- **Decision:** `AgentEx.resume/1` loads JSONL events and reconstructs a compact message list. Tool call results are replaced with placeholder `"[result from previous session]"` since actual results are not stored in the transcript.
+- **Decision:** `Agentic.resume/1` loads JSONL events and reconstructs a compact message list. Tool call results are replaced with placeholder `"[result from previous session]"` since actual results are not stored in the transcript.
 - **Rationale:** Storing full tool output in transcripts would bloat JSONL files. The placeholder is sufficient for the LLM to understand context. The resumed session starts with a system message indicating continuation.
 - **Source:** persistence-strategy.md §4.2
 

@@ -1,13 +1,13 @@
-# AgentEx Implementation Guide
+# Agentic Implementation Guide
 
 ## Overview
 
-AgentEx is a composable AI agent runtime for Elixir (~1.19+). It provides a complete agent loop with skills, working memory, knowledge persistence, and tool execution. The library uses a middleware-style pipeline architecture where stages wrap each other to form the loop.
+Agentic is a composable AI agent runtime for Elixir (~1.19+). It provides a complete agent loop with skills, working memory, knowledge persistence, and tool execution. The library uses a middleware-style pipeline architecture where stages wrap each other to form the loop.
 
 ## Quick Start
 
 ```elixir
-{:ok, result} = AgentEx.run(
+{:ok, result} = Agentic.run(
   prompt: "Help me refactor this module",
   workspace: "/path/to/workspace",
   callbacks: %{
@@ -43,7 +43,7 @@ The loop is built from **stages** — composable middleware functions. Each stag
 
 ### Profiles
 
-AgentEx supports four execution profiles:
+Agentic supports four execution profiles:
 
 | Profile | Description | Phases |
 |---------|-------------|--------|
@@ -54,7 +54,7 @@ AgentEx supports four execution profiles:
 
 ### Context
 
-The `AgentEx.Loop.Context` struct threads through all stages:
+The `Agentic.Loop.Context` struct threads through all stages:
 
 - **Identity**: `session_id`, `user_id`, `caller`
 - **State**: `messages`, `tools`, `phase`, `turns_used`
@@ -66,10 +66,10 @@ The `AgentEx.Loop.Context` struct threads through all stages:
 
 ## API Reference
 
-### AgentEx.run/1 — Main Entry Point
+### Agentic.run/1 — Main Entry Point
 
 ```elixir
-AgentEx.run(
+Agentic.run(
   prompt: "...",
   workspace: "/path/to/workspace",
   callbacks: %{
@@ -116,14 +116,14 @@ AgentEx.run(
 
 ---
 
-### AgentEx.resume/1 — Session Recovery
+### Agentic.resume/1 — Session Recovery
 
 ```elixir
-AgentEx.resume(
+Agentic.resume(
   session_id: "agx-abc123",
   workspace: "/path/to/workspace",
   callbacks: %{llm_chat: fn -> ... end},
-  transcript_backend: AgentEx.Persistence.Transcript.Local
+  transcript_backend: Agentic.Persistence.Transcript.Local
 )
 ```
 
@@ -131,12 +131,12 @@ Loads a previous session transcript and continues from where it left off.
 
 ---
 
-### AgentEx.new_workspace/2 — Workspace Scaffolding
+### Agentic.new_workspace/2 — Workspace Scaffolding
 
 ```elixir
-AgentEx.new_workspace("/path/to/new/workspace", 
+Agentic.new_workspace("/path/to/new/workspace", 
   workspace_type: :general,  # :general, :personal, :admin, :team, :task
-  storage: %AgentEx.Storage.Context{...}
+  storage: %Agentic.Storage.Context{...}
 )
 ```
 
@@ -146,7 +146,7 @@ Creates the standard workspace structure with AGENTS.md, MEMORY.md, TOOLS.md, et
 
 ## Callbacks
 
-Callbacks connect AgentEx to your infrastructure.
+Callbacks connect Agentic to your infrastructure.
 
 ### Required Callbacks
 
@@ -201,7 +201,7 @@ The LLM response **must** include:
 
 ## Built-in Tools
 
-AgentEx provides core file and system tools:
+Agentic provides core file and system tools:
 
 | Tool | Input Schema | Description |
 |------|--------------|-------------|
@@ -224,7 +224,7 @@ Additional tools are provided by extension modules:
 
 ## Stages
 
-Stages are the building blocks of the agent loop. Each implements `AgentEx.Loop.Stage` with `call(ctx, next)`.
+Stages are the building blocks of the agent loop. Each implements `Agentic.Loop.Stage` with `call(ctx, next)`.
 
 ### Core Stages
 
@@ -256,7 +256,7 @@ Stages are the building blocks of the agent loop. Each implements `AgentEx.Loop.
 
 ### Phases
 
-The phase state machine is defined in `AgentEx.Loop.Phase`:
+The phase state machine is defined in `Agentic.Loop.Phase`:
 
 ```
 agentic:        init → execute → done
@@ -273,21 +273,21 @@ Phase transitions are validated — invalid transitions return errors.
 
 ### Storage Backend
 
-`AgentEx.Storage.Context` provides a unified interface:
+`Agentic.Storage.Context` provides a unified interface:
 
 ```elixir
-ctx = AgentEx.Storage.Context.for_workspace("/path/to/workspace", :local)
-AgentEx.Storage.Context.read(ctx, "path/to/file")
-AgentEx.Storage.Context.write(ctx, "path/to/file", "content")
+ctx = Agentic.Storage.Context.for_workspace("/path/to/workspace", :local)
+Agentic.Storage.Context.read(ctx, "path/to/file")
+Agentic.Storage.Context.write(ctx, "path/to/file", "content")
 ```
 
 ### Persistence Behaviours
 
 | Behaviour | Purpose | Local Implementation |
 |-----------|---------|---------------------|
-| `AgentEx.Persistence.Transcript` | Session event logging | JSONL files |
-| `AgentEx.Persistence.Plan` | Structured plan storage | JSON files |
-| `AgentEx.Persistence.Knowledge` | Knowledge graph | JSONL + edges |
+| `Agentic.Persistence.Transcript` | Session event logging | JSONL files |
+| `Agentic.Persistence.Plan` | Structured plan storage | JSON files |
+| `Agentic.Persistence.Knowledge` | Knowledge graph | JSONL + edges |
 
 ---
 
@@ -304,23 +304,23 @@ Skills are folders in `workspace/skills/<name>/` containing:
 
 ```elixir
 # List installed skills
-AgentEx.Skill.Service.list("/workspace")
+Agentic.Skill.Service.list("/workspace")
 
 # Read skill content
-AgentEx.Skill.Service.read("/workspace", "skill-name")
+Agentic.Skill.Service.read("/workspace", "skill-name")
 
 # Search remote skills
-AgentEx.Skill.Service.search("query")
+Agentic.Skill.Service.search("query")
 
 # Get skill info without installing
-AgentEx.Skill.Service.info("owner/repo")
+Agentic.Skill.Service.info("owner/repo")
 
 # Install from GitHub
-AgentEx.Skill.Service.install("/workspace", "owner/repo")
-AgentEx.Skill.Service.install("/workspace", "owner/repo/path/to/skill")
+Agentic.Skill.Service.install("/workspace", "owner/repo")
+Agentic.Skill.Service.install("/workspace", "owner/repo/path/to/skill")
 
 # Analyze model requirements
-AgentEx.Skill.Service.analyze_model_tier("/workspace", "skill-name")
+Agentic.Skill.Service.analyze_model_tier("/workspace", "skill-name")
 ```
 
 ---
@@ -332,10 +332,10 @@ AgentEx.Skill.Service.analyze_model_tier("/workspace", "skill-name")
 In-memory Registry-backed context keeper for working memory:
 
 ```elixir
-AgentEx.Memory.ContextKeeper.start(workspace_id)
-AgentEx.Memory.ContextKeeper.put_facts(workspace_id, facts)
-AgentEx.Memory.ContextKeeper.get_context(workspace_id)
-AgentEx.Memory.ContextKeeper.query(workspace_id, prompt)
+Agentic.Memory.ContextKeeper.start(workspace_id)
+Agentic.Memory.ContextKeeper.put_facts(workspace_id, facts)
+Agentic.Memory.ContextKeeper.get_context(workspace_id)
+Agentic.Memory.ContextKeeper.query(workspace_id, prompt)
 ```
 
 ### MemoryManager
@@ -343,7 +343,7 @@ AgentEx.Memory.ContextKeeper.query(workspace_id, prompt)
 Retrieves relevant context from Knowledge store:
 
 ```elixir
-AgentEx.Memory.MemoryManager.retrieve_context(
+Agentic.Memory.MemoryManager.retrieve_context(
   prompt, 
   workspace, 
   user_id: "...",
@@ -359,7 +359,7 @@ AgentEx.Memory.MemoryManager.retrieve_context(
 Spawn bounded concurrent subagents for parallel tasks:
 
 ```elixir
-AgentEx.Subagent.Coordinator.spawn_subagent(
+Agentic.Subagent.Coordinator.spawn_subagent(
   workspace,
   "Analyze the auth module",
   parent_session_id: "parent-123",
@@ -375,11 +375,11 @@ Default limit: 5 concurrent subagents per workspace.
 
 ## Example Integration
 
-Here's how to integrate AgentEx into an Elixir application:
+Here's how to integrate Agentic into an Elixir application:
 
 ```elixir
 defmodule MyApp.Agent do
-  alias AgentEx
+  alias Agentic
   
   def run_agent(prompt, workspace) do
     callbacks = %{
@@ -388,7 +388,7 @@ defmodule MyApp.Agent do
       execute_tool: &execute_tool/3
     }
     
-    AgentEx.run(
+    Agentic.run(
       prompt: prompt,
       workspace: workspace,
       callbacks: callbacks,
@@ -447,8 +447,8 @@ Add to your `application.ex`:
 
 ```elixir
 def start(_type, _args) do
-  AgentEx.CircuitBreaker.init()
-  AgentEx.Application.start(nil, nil)
+  Agentic.CircuitBreaker.init()
+  Agentic.Application.start(nil, nil)
 end
 ```
 
@@ -460,21 +460,21 @@ end
 
 ## Telemetry & Observability
 
-AgentEx emits structured telemetry events via the standard `:telemetry` library. Every event uses the `[:agent_ex | ...]` prefix and carries typed measurements and metadata. Attach handlers to observe agent behavior in production.
+Agentic emits structured telemetry events via the standard `:telemetry` library. Every event uses the `[:agentic | ...]` prefix and carries typed measurements and metadata. Attach handlers to observe agent behavior in production.
 
 ### Quick Setup
 
 ```elixir
-# Attach a simple logger to all AgentEx events
+# Attach a simple logger to all Agentic events
 :telemetry.attach_many(
   "agent-ex-logger",
   [
-    [:agent_ex, :session, :start],
-    [:agent_ex, :session, :stop],
-    [:agent_ex, :session, :error],
-    [:agent_ex, :llm_call, :stop],
-    [:agent_ex, :tool, :stop],
-    [:agent_ex, :phase, :transition]
+    [:agentic, :session, :start],
+    [:agentic, :session, :stop],
+    [:agentic, :session, :error],
+    [:agentic, :llm_call, :stop],
+    [:agentic, :tool, :stop],
+    [:agentic, :phase, :transition]
   ],
   fn name, measurements, metadata, _config ->
     Logger.info("[telemetry] #{inspect(name)} #{inspect(measurements)} #{inspect(metadata)}")
@@ -485,14 +485,14 @@ AgentEx emits structured telemetry events via the standard `:telemetry` library.
 
 ### Using the Helper Module
 
-`AgentEx.Telemetry` provides two convenience functions:
+`Agentic.Telemetry` provides two convenience functions:
 
 ```elixir
 # Emit an event directly
-AgentEx.Telemetry.event([:session, :start], %{}, %{session_id: "abc", mode: :agentic})
+Agentic.Telemetry.event([:session, :start], %{}, %{session_id: "abc", mode: :agentic})
 
 # Wrap a function in start/stop events
-AgentEx.Telemetry.span([:pipeline, :stage, :start], [:pipeline, :stage, :stop], %{}, %{}, fn ->
+Agentic.Telemetry.span([:pipeline, :stage, :start], [:pipeline, :stage, :stop], %{}, %{}, fn ->
   do_work()
 end)
 ```
@@ -501,130 +501,130 @@ end)
 
 #### Session Lifecycle
 
-Emitted by `AgentEx.run/1` and `AgentEx.resume/1`.
+Emitted by `Agentic.run/1` and `Agentic.resume/1`.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :session, :start]` | Before pipeline begins | — | `session_id`, `mode`, `profile` |
-| `[:agent_ex, :session, :stop]` | After pipeline completes | `duration`, `cost`, `tokens`, `steps` | `session_id`, `mode` |
-| `[:agent_ex, :session, :error]` | Pipeline crashes | `duration` | `session_id`, `mode`, `error` |
-| `[:agent_ex, :session, :resume]` | Session resumed from transcript | — | `session_id`, `turns_restored` |
+| `[:agentic, :session, :start]` | Before pipeline begins | — | `session_id`, `mode`, `profile` |
+| `[:agentic, :session, :stop]` | After pipeline completes | `duration`, `cost`, `tokens`, `steps` | `session_id`, `mode` |
+| `[:agentic, :session, :error]` | Pipeline crashes | `duration` | `session_id`, `mode`, `error` |
+| `[:agentic, :session, :resume]` | Session resumed from transcript | — | `session_id`, `turns_restored` |
 
 #### Pipeline Stages
 
-Emitted by `AgentEx.Loop.Engine` for **every** stage in the pipeline.
+Emitted by `Agentic.Loop.Engine` for **every** stage in the pipeline.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :pipeline, :stage, :start]` | Before stage executes | — | `session_id`, `stage` |
-| `[:agent_ex, :pipeline, :stage, :stop]` | After stage completes | `duration` | `session_id`, `stage` |
+| `[:agentic, :pipeline, :stage, :start]` | Before stage executes | — | `session_id`, `stage` |
+| `[:agentic, :pipeline, :stage, :stop]` | After stage completes | `duration` | `session_id`, `stage` |
 
 `stage` is the short module name (e.g. `"LLMCall"`, `"ModeRouter"`).
 
 #### LLM Calls
 
-Emitted by `AgentEx.Loop.Stages.LLMCall`.
+Emitted by `Agentic.Loop.Stages.LLMCall`.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :llm_call, :start]` | Before calling the LLM | — | `session_id`, `model_tier` |
-| `[:agent_ex, :llm_call, :stop]` | After LLM responds | `duration`, `input_tokens`, `output_tokens`, `cost_usd` | `session_id`, `model_tier`, `route` |
+| `[:agentic, :llm_call, :start]` | Before calling the LLM | — | `session_id`, `model_tier` |
+| `[:agentic, :llm_call, :stop]` | After LLM responds | `duration`, `input_tokens`, `output_tokens`, `cost_usd` | `session_id`, `model_tier`, `route` |
 
 `route` is the resolved model ID (e.g. `"gpt-4o"`) or `nil` if routing failed.
 
 #### Tool Execution
 
-Emitted by `AgentEx.Loop.Stages.ToolExecutor`.
+Emitted by `Agentic.Loop.Stages.ToolExecutor`.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :tool, :stop]` | After tool completes (success or failure) | `duration`, `output_bytes` | `session_id`, `tool_name`, `success` |
+| `[:agentic, :tool, :stop]` | After tool completes (success or failure) | `duration`, `output_bytes` | `session_id`, `tool_name`, `success` |
 
 `success` is `true` or `false`.
 
 #### Context Management
 
-Emitted by `AgentEx.Loop.Stages.ContextGuard`.
+Emitted by `Agentic.Loop.Stages.ContextGuard`.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :context, :compact]` | Messages are compacted to save context window | `messages_before`, `messages_after`, `pct_before`, `pct_after` | `session_id` |
-| `[:agent_ex, :context, :cost_limit]` | Session hits the cost limit | `cost_usd`, `limit_usd` | `session_id` |
+| `[:agentic, :context, :compact]` | Messages are compacted to save context window | `messages_before`, `messages_after`, `pct_before`, `pct_after` | `session_id` |
+| `[:agentic, :context, :cost_limit]` | Session hits the cost limit | `cost_usd`, `limit_usd` | `session_id` |
 
 #### Phase Transitions
 
-Emitted by `AgentEx.Loop.Phase.transition/2`.
+Emitted by `Agentic.Loop.Phase.transition/2`.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :phase, :transition]` | Phase changes (e.g. `:plan` → `:execute`) | — | `session_id`, `mode`, `from`, `to` |
+| `[:agentic, :phase, :transition]` | Phase changes (e.g. `:plan` → `:execute`) | — | `session_id`, `mode`, `from`, `to` |
 
 #### Mode Router
 
-Emitted by `AgentEx.Loop.Stages.ModeRouter` for every routing decision.
+Emitted by `Agentic.Loop.Stages.ModeRouter` for every routing decision.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :mode_router, :route]` | After routing decision | — | `session_id`, `mode`, `phase`, `stop_reason`, `action` |
+| `[:agentic, :mode_router, :route]` | After routing decision | — | `session_id`, `mode`, `phase`, `stop_reason`, `action` |
 
 `action` is one of: `"done"`, `"next"`, `"reentry"`.
 
 #### Commitment Detection
 
-Emitted by `AgentEx.Loop.Stages.CommitmentGate`.
+Emitted by `Agentic.Loop.Stages.CommitmentGate`.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :commitment, :detected]` | Agent made a commitment but didn't act | `continuations` | `session_id` |
+| `[:agentic, :commitment, :detected]` | Agent made a commitment but didn't act | `continuations` | `session_id` |
 
 `continuations` is the total number of commitment continuations so far (max 2 before giving up).
 
 #### Plan Tracking
 
-Emitted by `AgentEx.Loop.Stages.PlanTracker` in `:agentic_planned` mode.
+Emitted by `Agentic.Loop.Stages.PlanTracker` in `:agentic_planned` mode.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :plan, :created]` | Plan is parsed from LLM output | `step_count` | `session_id` |
-| `[:agent_ex, :plan, :step, :complete]` | A single plan step is marked complete | — | `session_id`, `step_index`, `total_steps` |
-| `[:agent_ex, :plan, :all_complete]` | All plan steps are done | — | `session_id`, `total_steps` |
+| `[:agentic, :plan, :created]` | Plan is parsed from LLM output | `step_count` | `session_id` |
+| `[:agentic, :plan, :step, :complete]` | A single plan step is marked complete | — | `session_id`, `step_index`, `total_steps` |
+| `[:agentic, :plan, :all_complete]` | All plan steps are done | — | `session_id`, `total_steps` |
 
 #### Circuit Breaker
 
-Emitted by `AgentEx.CircuitBreaker` for per-tool failure tracking.
+Emitted by `Agentic.CircuitBreaker` for per-tool failure tracking.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :circuit_breaker, :trip]` | Tool failures exceed threshold (circuit opens) | `failure_count` | `tool_name` |
-| `[:agent_ex, :circuit_breaker, :recover]` | Tool succeeds after half-open test (circuit closes) | — | `tool_name` |
+| `[:agentic, :circuit_breaker, :trip]` | Tool failures exceed threshold (circuit opens) | `failure_count` | `tool_name` |
+| `[:agentic, :circuit_breaker, :recover]` | Tool succeeds after half-open test (circuit closes) | — | `tool_name` |
 
 #### Model Router
 
-Emitted by `AgentEx.ModelRouter.Free` during periodic catalog refreshes.
+Emitted by `Agentic.ModelRouter.Free` during periodic catalog refreshes.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :model_router, :refresh]` | Free model catalog refreshed from OpenRouter | `duration`, `primary_count`, `lightweight_count` | — |
+| `[:agentic, :model_router, :refresh]` | Free model catalog refreshed from OpenRouter | `duration`, `primary_count`, `lightweight_count` | — |
 
 #### Memory System
 
-Emitted by `AgentEx.Memory.ContextKeeper` and `AgentEx.Memory.MemoryManager`.
+Emitted by `Agentic.Memory.ContextKeeper` and `Agentic.Memory.MemoryManager`.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :memory, :ingest]` | Facts are ingested into working memory | `fact_count` | `workspace_id` |
-| `[:agent_ex, :memory, :evict]` | Oldest facts are dropped to stay under the 500-entry cap | `evicted_count`, `remaining_count` | `workspace_id` |
-| `[:agent_ex, :memory, :retrieval, :stop]` | Context retrieval completes (knowledge store + ContextKeeper) | `duration`, `context_chars`, `cache_hit` | `workspace_id`, `incremental` |
+| `[:agentic, :memory, :ingest]` | Facts are ingested into working memory | `fact_count` | `workspace_id` |
+| `[:agentic, :memory, :evict]` | Oldest facts are dropped to stay under the 500-entry cap | `evicted_count`, `remaining_count` | `workspace_id` |
+| `[:agentic, :memory, :retrieval, :stop]` | Context retrieval completes (knowledge store + ContextKeeper) | `duration`, `context_chars`, `cache_hit` | `workspace_id`, `incremental` |
 
 #### Subagent Lifecycle
 
-Emitted by `AgentEx.Subagent.Coordinator`.
+Emitted by `Agentic.Subagent.Coordinator`.
 
 | Event | When | Measurements | Metadata |
 |-------|------|-------------|----------|
-| `[:agent_ex, :subagent, :spawn]` | Subagent task starts | — | `session_id`, `parent_session_id`, `depth` |
-| `[:agent_ex, :subagent, :complete]` | Subagent finishes successfully | `duration`, `cost`, `steps` | `session_id`, `parent_session_id` |
-| `[:agent_ex, :subagent, :error]` | Subagent fails | `duration` | `session_id`, `parent_session_id`, `error` |
+| `[:agentic, :subagent, :spawn]` | Subagent task starts | — | `session_id`, `parent_session_id`, `depth` |
+| `[:agentic, :subagent, :complete]` | Subagent finishes successfully | `duration`, `cost`, `steps` | `session_id`, `parent_session_id` |
+| `[:agentic, :subagent, :error]` | Subagent fails | `duration` | `session_id`, `parent_session_id`, `error` |
 
 ### Typical Dashboard Metrics
 
@@ -649,12 +649,12 @@ Wire these events into your observability stack (Telegraf, StatsD, Prometheus vi
 
 ```elixir
 # In your application supervisor children:
-{Telemetry.Metrics.ConsoleReporter, metrics: AgentEx.Telemetry.metrics()}
+{Telemetry.Metrics.ConsoleReporter, metrics: Agentic.Telemetry.metrics()}
 
 # Or define metrics manually:
-Telemetry.Metrics.summary([:agent_ex, :llm_call, :stop], :duration, unit: {:native, :millisecond})
-Telemetry.Metrics.counter([:agent_ex, :tool, :stop], tags: [:tool_name, :success])
-Telemetry.Metrics.distribution([:agent_ex, :session, :stop], :duration)
+Telemetry.Metrics.summary([:agentic, :llm_call, :stop], :duration, unit: {:native, :millisecond})
+Telemetry.Metrics.counter([:agentic, :tool, :stop], tags: [:tool_name, :success])
+Telemetry.Metrics.distribution([:agentic, :session, :stop], :duration)
 ```
 
 ---
@@ -668,7 +668,7 @@ defmodule MyAppTest do
   use ExUnit.Case, async: true
   
   test "runs agent" do
-    callbacks = AgentEx.TestHelpers.mock_callbacks(%{
+    callbacks = Agentic.TestHelpers.mock_callbacks(%{
       llm_chat: fn _ ->
         {:ok, %{
           "content" => [%{"type" => "text", "text" => "Done!"}],
@@ -677,7 +677,7 @@ defmodule MyAppTest do
       end
     })
     
-    ctx = AgentEx.TestHelpers.build_ctx(callbacks: callbacks)
+    ctx = Agentic.TestHelpers.build_ctx(callbacks: callbacks)
     
     # Run test
   end
@@ -693,7 +693,7 @@ end
 │                         Host Application                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│   AgentEx.run()                                                 │
+│   Agentic.run()                                                 │
 │        │                                                         │
 │   ┌────▼────────────────────────────────────────────────────┐   │
 │   │                    Engine.run(ctx, stages)              │   │
@@ -725,4 +725,4 @@ end
 - **AGENTS.md** — Workspace operating guidelines
 - **priv/core_skills/** — Built-in skill definitions
 - **priv/prompts/** — Prompt templates
-- **Test files** in `test/agent_ex/` for usage patterns
+- **Test files** in `test/agentic/` for usage patterns

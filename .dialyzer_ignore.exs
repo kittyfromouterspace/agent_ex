@@ -1,9 +1,10 @@
 [
-  ~r"lib/mix/tasks/agent_ex.test_setup_mneme.ex.*callback_info_missing",
-  ~r"lib/agent_ex/skill/analyzer.ex.*pattern_match",
-  ~r"lib/agent_ex/skill/analyzer.ex.*unused_fun",
-  ~r"lib/agent_ex/skill/core_skills.ex.*pattern_match",
-  ~r"lib/agent_ex/skill/service.ex.*pattern_match",
-  ~r"lib/agent_ex/skill/service.ex.*unused_fun",
-  ~r"lib/agent_ex/tools/skill.ex.*pattern_match"
+  ~r"lib/mix/tasks/agentic.test_setup_recollect.ex.*callback_info_missing",
+  ~r"lib/agentic/skill/analyzer.ex.*pattern_match",
+  ~r"lib/agentic/skill/analyzer.ex.*unused_fun",
+  ~r"lib/agentic/skill/core_skills.ex.*pattern_match",
+  ~r"lib/agentic/skill/service.ex.*pattern_match",
+  ~r"lib/agentic/skill/service.ex.*unused_fun",
+  ~r"lib/agentic/tools/skill.ex.*pattern_match",
+  ~r"lib/agentic/protocol/acp/session.ex.*pattern_match"
 ]

@@ -1,15 +1,15 @@
 # Cross-Codebase Porting Analysis
 
-> Companion to [Main Proposal](./multi-mode-loop-proposal.md). Identifies existing modules, patterns, and code from **homunculus** and **strategic_change_engine** (SCE) that can be ported to AgentEx.
+> Companion to [Main Proposal](./multi-mode-loop-proposal.md). Identifies existing modules, patterns, and code from **homunculus** and **strategic_change_engine** (SCE) that can be ported to Agentic.
 
 ---
 
 ## Source Codebases
 
-| Codebase | Structure | Relationship to AgentEx |
+| Codebase | Structure | Relationship to Agentic |
 |---|---|---|
-| **homunculus** | 4-app Elixir umbrella (`homunculus_agent`, `homunculus_core`, `homunculus_shared`, `homunculus_web`) | Uses `agent_ex` as a GitHub-sourced dependency. The `homunculus_agent` app bridges to AgentEx via `AgentExCallbacks` and `DataAccess` behaviour. |
-| **strategic_change_engine** (SCE) | Single Phoenix/Ash app with 9 specialized agents | Uses `mneme` as a dependency. Shares the same Ash config block as homunculus. |
+| **homunculus** | 4-app Elixir umbrella (`homunculus_agent`, `homunculus_core`, `homunculus_shared`, `homunculus_web`) | Uses `agentic` as a GitHub-sourced dependency. The `homunculus_agent` app bridges to Agentic via `AgenticCallbacks` and `DataAccess` behaviour. |
+| **strategic_change_engine** (SCE) | Single Phoenix/Ash app with 9 specialized agents | Uses `recollect` as a dependency. Shares the same Ash config block as homunculus. |
 
 ---
 
@@ -42,7 +42,7 @@
 
 **Porting path:**
 1. Extract the coordination pattern (spawn → monitor → collect result → deliver to parent)
-2. Replace `Agent.Supervisor.start_agent/3` with `AgentEx.run/1` calls
+2. Replace `Agent.Supervisor.start_agent/3` with `Agentic.run/1` calls
 3. Replace `DataAccess.subscribe` / `Registry.whereis` with a callback-based approach
 4. Replace the ad-hoc `@max_concurrent 5` count with the `LLMSemaphore` pattern from SCE
 
@@ -133,15 +133,15 @@
 
 ---
 
-### 1.5 Callback Architecture → Homunculus `AgentExCallbacks`
+### 1.5 Callback Architecture → Homunculus `AgenticCallbacks`
 
 **Addresses:** New Callbacks (Main Proposal §4)
 
 | Source File | Module | Lines |
 |---|---|---|
-| `homunculus/apps/homunculus_agent/lib/homunculus/agent/agent_ex_callbacks.ex` | `Homunculus.Agent.AgentExCallbacks` | 183 |
+| `homunculus/apps/homunculus_agent/lib/homunculus/agent/agentic_callbacks.ex` | `Homunculus.Agent.AgenticCallbacks` | 183 |
 
-**What exists:** 10-callback map pattern bridging the generic AgentEx loop to host-specific subsystems:
+**What exists:** 10-callback map pattern bridging the generic Agentic loop to host-specific subsystems:
 
 | Callback | Purpose |
 |---|---|
@@ -238,7 +238,7 @@ Rich per-agent-type context assembly with different context views per agent role
 | Priority | Module to Port | Source | Proposal Section | Effort |
 |---|---|---|---|---|
 | 1 | `ContinuationDetector` | Homunculus | ModeRouter + PlanTracker | Very Low |
-| 2 | `AgentExCallbacks` callback-map pattern | Homunculus | New Callbacks | Very Low |
+| 2 | `AgenticCallbacks` callback-map pattern | Homunculus | New Callbacks | Very Low |
 | 3 | `LLMSemaphore` | SCE | Subagent concurrency | Very Low |
 | 4 | `MemoryManager.optimize_context/3` | Homunculus | Context compression | Low |
 | 5 | `ContextAssembler` budget-aware assembly | Homunculus | Workspace Snapshot | Low |

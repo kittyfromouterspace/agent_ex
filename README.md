@@ -1,8 +1,8 @@
-# AgentEx
+# Agentic
 
 [![Elixir Version](https://img.shields.io/badge/Elixir-~%201.19-blue.svg)](https://elixir-lang.org/)
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-green.svg)](LICENSE)
-[![Package](https://img.shields.io/badge/Package-Hex.pm-orange.svg)](https://hex.pm/packages/agent_ex)
+[![Package](https://img.shields.io/badge/Package-Hex.pm-orange.svg)](https://hex.pm/packages/agentic)
 
 A composable AI agent runtime for Elixir. Provides a complete agent loop with skills, working memory, knowledge persistence, and tool use. Drop it into any Elixir project to get a fully functional AI agent.
 
@@ -19,19 +19,19 @@ A composable AI agent runtime for Elixir. Provides a complete agent loop with sk
 
 ## Installation
 
-Add AgentEx to your dependencies in `mix.exs`:
+Add Agentic to your dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:agent_ex, "~> 0.1.0"}
+    {:agentic, "~> 0.1.0"}
   ]
 end
 ```
 
 ### Database Backend
 
-AgentEx uses Mneme for knowledge persistence. Mneme supports two database backends:
+Agentic uses Recollect for knowledge persistence. Recollect supports two database backends:
 
 **Option A: libSQL (Recommended for new projects)**
 Single-file SQLite with native vector support. Zero configuration.
@@ -39,19 +39,19 @@ Single-file SQLite with native vector support. Zero configuration.
 ```elixir
 def deps do
   [
-    {:agent_ex, "~> 0.1.0"},
+    {:agentic, "~> 0.1.0"},
     {:ecto_libsql, "~> 0.9"}
   ]
 end
 ```
 
-Configure Mneme:
+Configure Recollect:
 ```elixir
-config :mneme,
-  database_adapter: Mneme.DatabaseAdapter.LibSQL,
+config :recollect,
+  database_adapter: Recollect.DatabaseAdapter.LibSQL,
   repo: MyApp.Repo,
   embedding: [
-    provider: Mneme.Embedding.OpenRouter,
+    provider: Recollect.Embedding.OpenRouter,
     dimensions: 768
   ]
 ```
@@ -62,20 +62,20 @@ Traditional server-based database with pgvector extension.
 ```elixir
 def deps do
   [
-    {:agent_ex, "~> 0.1.0"},
+    {:agentic, "~> 0.1.0"},
     {:postgrex, "~> 0.19"},
     {:pgvector, "~> 0.3"}
   ]
 end
 ```
 
-Configure Mneme:
+Configure Recollect:
 ```elixir
-config :mneme,
-  database_adapter: Mneme.DatabaseAdapter.Postgres,
+config :recollect,
+  database_adapter: Recollect.DatabaseAdapter.Postgres,
   repo: MyApp.Repo,
   embedding: [
-    provider: Mneme.Embedding.OpenRouter,
+    provider: Recollect.Embedding.OpenRouter,
     dimensions: 1536
   ]
 ```
@@ -83,7 +83,7 @@ config :mneme,
 ## Quick Start
 
 ```elixir
-result = AgentEx.run(
+result = Agentic.run(
   prompt: "Create a README.md file for my project",
   workspace: "/path/to/your/project",
   callbacks: %{
@@ -96,7 +96,7 @@ result = AgentEx.run(
 
 ## Architecture
 
-AgentEx uses a **stage pipeline** architecture. Each stage wraps the next, receiving the context and a `next` function to call downstream:
+Agentic uses a **stage pipeline** architecture. Each stage wraps the next, receiving the context and a `next` function to call downstream:
 
 ```
 ContextGuard → ProgressInjector → LLMCall → ModeRouter → ToolExecutor → CommitmentGate
@@ -118,7 +118,7 @@ ContextGuard → ProgressInjector → LLMCall → ModeRouter → ToolExecutor �
 
 ## Callbacks API
 
-The `callbacks` map connects AgentEx to your LLM provider and external systems:
+The `callbacks` map connects Agentic to your LLM provider and external systems:
 
 ### Required
 
@@ -141,7 +141,7 @@ The `callbacks` map connects AgentEx to your LLM provider and external systems:
 
 ## Core Tools
 
-AgentEx ships with built-in tools for file operations:
+Agentic ships with built-in tools for file operations:
 
 - `file_read` — Read file contents
 - `file_write` — Write or overwrite files
@@ -169,7 +169,7 @@ All backends have a `:local` file-based implementation.
 ## Configuration
 
 ```elixir
-AgentEx.run(
+Agentic.run(
   prompt: "...",
   workspace: "/path",
   callbacks: %{llm_chat: &my_llm/1},

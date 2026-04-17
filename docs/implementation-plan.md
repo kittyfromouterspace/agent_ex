@@ -1,4 +1,4 @@
-# Implementation Plan — AgentEx Multi-Mode Loop
+# Implementation Plan — Agentic Multi-Mode Loop
 
 > Companion to [Main Proposal](./multi-mode-loop-proposal.md). Covers phased implementation order, testing strategy, and complete file manifest.
 
@@ -11,9 +11,9 @@ Combining the multi-mode proposal (Main Proposal §1–11), gap analysis enhance
 | Phase | Scope | Details |
 |---|---|---|
 | **V1.0** | Multi-mode core + persistence behaviours | `Phase` state machine module, new Context fields, `ModeRouter` (replaces `StopReasonRouter`), `PlanBuilder`, `PlanTracker`, `HumanCheckpoint`, `VerifyPhase`, new profiles (all using `ModeRouter`), persistence behaviour definitions with `:local` backends, `ContinuationDetector` port, callback architecture. |
-| **V1.1** | Workspace snapshot + output clipping + deduplication + Mneme knowledge backend | WorkspaceSnapshot stage, per-tool output clipping in ToolExecutor, file-read deduplication in ContextGuard, `:mneme` Knowledge backend, ported ContextAssembler utilities, ported MemoryManager.optimize_context pattern. |
+| **V1.1** | Workspace snapshot + output clipping + deduplication + Recollect knowledge backend | WorkspaceSnapshot stage, per-tool output clipping in ToolExecutor, file-read deduplication in ContextGuard, `:recollect` Knowledge backend, ported ContextAssembler utilities, ported MemoryManager.optimize_context pattern. |
 | **V1.2** | Prompt prefix / cache awareness | LLMCall restructured with stable/volatile separation, cache boundary markers, `stable_prefix_hash` context field. |
-| **V1.3** | Full transcript + session resumption | TranscriptRecorder stage, `AgentEx.resume/1`, JSONL persistence, plan state serialization in transcript. |
+| **V1.3** | Full transcript + session resumption | TranscriptRecorder stage, `Agentic.resume/1`, JSONL persistence, plan state serialization in transcript. |
 | **V2.0** | Bounded subagents + ported patterns | Ported Coordinator architecture, `delegate_task` tool, LLMSemaphore, subagent depth/budget fields. |
 | **V2.1** | Tool permission gating | `tool_permissions` context field, `:on_tool_approval` callback, ToolExecutor pre-check. |
 
@@ -23,11 +23,11 @@ V1.1 is the highest-value enhancement because it directly improves `:agentic_pla
 
 ## 2. Testing Strategy
 
-Testing follows the existing patterns in `test/support/test_helpers.ex` (`mock_callbacks/1`, `build_ctx/1`, `create_test_workspace/0`). The existing `AgentEx.Loop.Stage` behaviour means every stage is testable in isolation by calling `Stage.call(ctx, next_fn)` with a mock `next`.
+Testing follows the existing patterns in `test/support/test_helpers.ex` (`mock_callbacks/1`, `build_ctx/1`, `create_test_workspace/0`). The existing `Agentic.Loop.Stage` behaviour means every stage is testable in isolation by calling `Stage.call(ctx, next_fn)` with a mock `next`.
 
 ### 2.1 Unit Tests (per-stage)
 
-Each new stage gets its own test file in `test/agent_ex/loop/stages/`:
+Each new stage gets its own test file in `test/agentic/loop/stages/`:
 
 | Test File | What It Tests |
 |---|---|
@@ -63,7 +63,7 @@ End-to-end tests for each mode using `build_ctx/1` with full pipeline:
 | `agentic_planned_test.exs` | Full plan → execute → verify lifecycle. Plan parsing from LLM output. Step completion across multiple tool-use turns. Verify phase produces final summary. Pre-built plan skips `:plan` phase. |
 | `turn_by_turn_test.exs` | Human approval flow (proceed with tools). Human revision flow (agent re-thinks). Abort flow (partial results). Multiple chunks with review→execute→review cycling. |
 
-Regression: existing `agent_ex_test.exs` and `integration_test.exs` must pass unchanged.
+Regression: existing `agentic_test.exs` and `integration_test.exs` must pass unchanged.
 
 ### 2.3 Persistence Backend Tests
 
@@ -74,9 +74,9 @@ Each behaviour gets contract tests verifying the `:local` implementation:
 | `persistence/transcript_local_test.exs` | JSONL `append`, `load`, `load_since`, `list_sessions`. Append-only correctness. Session not found. Event ordering. |
 | `persistence/plan_local_test.exs` | JSON `create`, `get`, `update_step`, `list_plans`. Step status transitions (`:pending → :in_progress → :complete`). Plan not found. |
 | `persistence/knowledge_local_test.exs` | Entry `create_entry`, `search` (keyword-based for `:local`), `recent`, `create_edge`, `get_edges`. Supersede demotes confidence. |
-| `persistence/knowledge_mneme_test.exs` | Mneme backend. Tagged `@tag :mneme` — only runs when Mneme DB is configured. Tests `search`, `create_entry`, `connect`, `supersede`. |
+| `persistence/knowledge_recollect_test.exs` | Recollect backend. Tagged `@tag :recollect` — only runs when Recollect DB is configured. Tests `search`, `create_entry`, `connect`, `supersede`. |
 
-Contract test pattern: define shared test macros per behaviour, run against each backend module. This ensures `:local` and `:mneme` produce compatible results.
+Contract test pattern: define shared test macros per behaviour, run against each backend module. This ensures `:local` and `:recollect` produce compatible results.
 
 ### 2.4 Porting Tests
 
@@ -93,7 +93,7 @@ For code ported from neighboring codebases:
 - All existing test files must pass (they will be updated to use `ModeRouter` instead of `StopReasonRouter`)
 - New Context fields have sensible defaults (`mode: :agentic`, `phase: :execute`, etc.)
 - All profiles use `ModeRouter` — `StopReasonRouter` is deleted
-- `mix test` continues to work with ecto no-ops (Repo will be added by Mneme config, not by AgentEx)
+- `mix test` continues to work with ecto no-ops (Repo will be added by Recollect config, not by Agentic)
 
 ### 2.6 Test Helper Additions
 
@@ -147,7 +147,7 @@ end
 
 ### New Files
 
-**Stages** (lib/agent_ex/loop/stages/):
+**Stages** (lib/agentic/loop/stages/):
 
 | File | Section | Description |
 |---|---|---|
@@ -159,13 +159,13 @@ end
 | `workspace_snapshot.ex` | Main §5.6 | Workspace context gathering stage |
 | `transcript_recorder.ex` | Gap E4 | Session event recording stage |
 
-**State machine** (lib/agent_ex/loop/):
+**State machine** (lib/agentic/loop/):
 
 | File | Section | Description |
 |---|---|---|
 | `phase.ex` | Main §3.2 | Phase state machine with per-mode transition maps |
 
-**Persistence behaviours** (lib/agent_ex/persistence/):
+**Persistence behaviours** (lib/agentic/persistence/):
 
 | File | Description |
 |---|---|
@@ -175,9 +175,9 @@ end
 | `plan/local.ex` | JSON file plan backend |
 | `knowledge.ex` | Knowledge behaviour definition |
 | `knowledge/local.ex` | File-based knowledge backend |
-| `knowledge/mneme.ex` | Mneme-backed knowledge backend |
+| `knowledge/recollect.ex` | Recollect-backed knowledge backend |
 
-**Ported utilities** (lib/agent_ex/):
+**Ported utilities** (lib/agentic/):
 
 | File | Source | Description |
 |---|---|---|
@@ -189,44 +189,44 @@ end
 
 | File | Description |
 |---|---|
-| `agent_ex/loop/stages/mode_router_test.exs` | ModeRouter unit tests |
-| `agent_ex/loop/phase_test.exs` | Phase state machine tests (transition validation per mode, invalid transitions, initial_phase/1) |
-| `agent_ex/loop/stages/plan_builder_test.exs` | PlanBuilder unit tests |
-| `agent_ex/loop/stages/plan_tracker_test.exs` | PlanTracker unit tests |
-| `agent_ex/loop/stages/human_checkpoint_test.exs` | HumanCheckpoint unit tests |
-| `agent_ex/loop/stages/verify_phase_test.exs` | VerifyPhase unit tests |
-| `agent_ex/loop/stages/workspace_snapshot_test.exs` | WorkspaceSnapshot unit tests |
-| `agent_ex/loop/agentic_planned_test.exs` | Planned mode integration test |
-| `agent_ex/loop/turn_by_turn_test.exs` | Turn-by-turn mode integration test |
-| `agent_ex/persistence/transcript_local_test.exs` | Transcript backend tests |
-| `agent_ex/persistence/plan_local_test.exs` | Plan backend tests |
-| `agent_ex/persistence/knowledge_local_test.exs` | Knowledge local backend tests |
-| `agent_ex/persistence/knowledge_mneme_test.exs` | Knowledge Mneme backend tests |
-| `agent_ex/loop/continuation_detector_test.exs` | Ported from Homunculus |
-| `agent_ex/loop/context_compression_test.exs` | Ported from Homunculus |
-| `agent_ex/concurrency/semaphore_test.exs` | Ported from SCE |
+| `agentic/loop/stages/mode_router_test.exs` | ModeRouter unit tests |
+| `agentic/loop/phase_test.exs` | Phase state machine tests (transition validation per mode, invalid transitions, initial_phase/1) |
+| `agentic/loop/stages/plan_builder_test.exs` | PlanBuilder unit tests |
+| `agentic/loop/stages/plan_tracker_test.exs` | PlanTracker unit tests |
+| `agentic/loop/stages/human_checkpoint_test.exs` | HumanCheckpoint unit tests |
+| `agentic/loop/stages/verify_phase_test.exs` | VerifyPhase unit tests |
+| `agentic/loop/stages/workspace_snapshot_test.exs` | WorkspaceSnapshot unit tests |
+| `agentic/loop/agentic_planned_test.exs` | Planned mode integration test |
+| `agentic/loop/turn_by_turn_test.exs` | Turn-by-turn mode integration test |
+| `agentic/persistence/transcript_local_test.exs` | Transcript backend tests |
+| `agentic/persistence/plan_local_test.exs` | Plan backend tests |
+| `agentic/persistence/knowledge_local_test.exs` | Knowledge local backend tests |
+| `agentic/persistence/knowledge_recollect_test.exs` | Knowledge Recollect backend tests |
+| `agentic/loop/continuation_detector_test.exs` | Ported from Homunculus |
+| `agentic/loop/context_compression_test.exs` | Ported from Homunculus |
+| `agentic/concurrency/semaphore_test.exs` | Ported from SCE |
 
 ### Modified Files
 
 | File | Change |
 |---|---|
-| `lib/agent_ex/loop/context.ex` | Add new fields (`mode`, `plan`, `plan_step_index`, `plan_steps_completed`, `human_input`, `pending_human_response`, `workspace_snapshot`, `file_reads`). |
-| `lib/agent_ex/loop/profile.ex` | Add `stages(:agentic_planned)`, `stages(:turn_by_turn)`, `config(:agentic_planned)`, `config(:turn_by_turn)` clauses. Update `:agentic` and `:conversational` to use `ModeRouter`. |
-| `lib/agent_ex.ex` | Add `:mode` opt to `run/1`. Resolve mode to profile. Add `resume/1` function. Wire new callbacks. |
-| `lib/agent_ex/storage/context.ex` | Add `@behaviour` reference for compile-time enforcement. |
-| `lib/agent_ex/storage/local.ex` | Add `@behaviour` implementation. |
-| `lib/agent_ex/loop/stages/context_guard.ex` | Add file-read deduplication logic using `ctx.file_reads`. Add per-tool output clipping config. |
-| `lib/agent_ex/loop/stages/tool_executor.ex` | Respect `tool_permissions` before execution. Apply per-tool `max_output_bytes` clipping. |
-| `lib/agent_ex/loop/stages/llm_call.ex` | Add cache boundary markers (stable/volatile separation). |
+| `lib/agentic/loop/context.ex` | Add new fields (`mode`, `plan`, `plan_step_index`, `plan_steps_completed`, `human_input`, `pending_human_response`, `workspace_snapshot`, `file_reads`). |
+| `lib/agentic/loop/profile.ex` | Add `stages(:agentic_planned)`, `stages(:turn_by_turn)`, `config(:agentic_planned)`, `config(:turn_by_turn)` clauses. Update `:agentic` and `:conversational` to use `ModeRouter`. |
+| `lib/agentic.ex` | Add `:mode` opt to `run/1`. Resolve mode to profile. Add `resume/1` function. Wire new callbacks. |
+| `lib/agentic/storage/context.ex` | Add `@behaviour` reference for compile-time enforcement. |
+| `lib/agentic/storage/local.ex` | Add `@behaviour` implementation. |
+| `lib/agentic/loop/stages/context_guard.ex` | Add file-read deduplication logic using `ctx.file_reads`. Add per-tool output clipping config. |
+| `lib/agentic/loop/stages/tool_executor.ex` | Respect `tool_permissions` before execution. Apply per-tool `max_output_bytes` clipping. |
+| `lib/agentic/loop/stages/llm_call.ex` | Add cache boundary markers (stable/volatile separation). |
 | `test/support/test_helpers.ex` | Add `mock_human_callback/1`, `build_planned_ctx/1`, `build_turn_by_turn_ctx/1`, `mock_llm_plan_response/1`. |
-| `mix.exs` | Remove `ecto.setup`/`ecto.reset` aliases (no longer no-ops once Mneme is configured). Keep `ecto_sql`/`postgrex` deps (required by mneme). |
+| `mix.exs` | Remove `ecto.setup`/`ecto.reset` aliases (no longer no-ops once Recollect is configured). Keep `ecto_sql`/`postgrex` deps (required by recollect). |
 
 ### Deleted Files
 
 | File | Reason |
 |---|---|
-| `lib/agent_ex/loop/stages/stop_reason_router.ex` | Replaced by `mode_router.ex` |
-| `test/agent_ex/loop/stages/stop_reason_router_test.exs` | Replaced by `mode_router_test.exs` |
+| `lib/agentic/loop/stages/stop_reason_router.ex` | Replaced by `mode_router.ex` |
+| `test/agentic/loop/stages/stop_reason_router_test.exs` | Replaced by `mode_router_test.exs` |
 
 ### Unchanged Files
 

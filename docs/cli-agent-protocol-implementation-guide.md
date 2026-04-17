@@ -1,6 +1,6 @@
 # CLI Agent Protocol Implementation Guide
 
-A practical guide for implementing new CLI-based agent protocols in AgentEx, based on patterns from ClaudeCode and OpenCode.
+A practical guide for implementing new CLI-based agent protocols in Agentic, based on patterns from ClaudeCode and OpenCode.
 
 ## Overview
 
@@ -10,7 +10,7 @@ CLI agent protocols communicate with local agent CLIs (like `claude`, `codex`, `
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                      AgentEx Loop Stages                                 │
+│                      Agentic Loop Stages                                 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  ContextGuard → ProgressInjector → CLIExecutor → ModeRouter → ...      │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -26,7 +26,7 @@ CLI agent protocols communicate with local agent CLIs (like `claude`, `codex`, `
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    Your Protocol Module                                  │
-│  use AgentEx.AgentProtocol.CLI                                           │
+│  use Agentic.AgentProtocol.CLI                                           │
 │                                                                         │
 │  Lifecycle:    start() → send() → resume() → stop()                     │
 │  Formatting:   format_messages(), parse_stream()                        │
@@ -36,11 +36,11 @@ CLI agent protocols communicate with local agent CLIs (like `claude`, `codex`, `
 
 ## Quick Start
 
-Create a new file in `lib/agent_ex/protocol/`:
+Create a new file in `lib/agentic/protocol/`:
 
 ```elixir
-defmodule AgentEx.Protocol.Codex do
-  use AgentEx.AgentProtocol.CLI
+defmodule Agentic.Protocol.Codex do
+  use Agentic.AgentProtocol.CLI
 
   require Logger
 
@@ -314,7 +314,7 @@ end
 
 ## Required Callbacks
 
-### CLI Behaviour (AgentEx.AgentProtocol.CLI)
+### CLI Behaviour (Agentic.AgentProtocol.CLI)
 
 | Callback | Returns | Description |
 |----------|---------|-------------|
@@ -328,7 +328,7 @@ end
 | `format_system_prompt(prompt, is_first, config)` | `[String.t()] \| nil` | Format system prompt arg |
 | `merge_env(config, extra_env)` | `[{String.t(), String.t()}]` | Merge environment variables |
 
-### AgentProtocol (AgentEx.AgentProtocol)
+### AgentProtocol (Agentic.AgentProtocol)
 
 | Callback | Returns | Description |
 |----------|---------|-------------|
@@ -383,7 +383,7 @@ session_state = %{
 
 ### Input Format (format_messages)
 
-Most CLIs expect JSON. Convert AgentEx messages:
+Most CLIs expect JSON. Convert Agentic messages:
 
 ```elixir
 def format_messages(messages, _ctx) do
@@ -464,13 +464,13 @@ Return values:
 
 ## Testing
 
-Use AgentEx's test helpers to mock the protocol:
+Use Agentic's test helpers to mock the protocol:
 
 ```elixir
-defmodule AgentEx.Protocol.CodexTest do
+defmodule Agentic.Protocol.CodexTest do
   use ExUnit.Case, async: true
 
-  alias AgentEx.Protocol.Codex
+  alias Agentic.Protocol.Codex
 
   setup do
     # Mock Port for testing
@@ -513,11 +513,11 @@ end
 Register your protocol in the application:
 
 ```elixir
-# lib/agent_ex/application.ex
+# lib/agentic/application.ex
 def start(_type, _args) do
   # ... other children
   
-  AgentEx.Protocol.Registry.register(:codex, AgentEx.Protocol.Codex)
+  Agentic.Protocol.Registry.register(:codex, Agentic.Protocol.Codex)
   
   Supervisor.start_link(children, strategy: :one_for_one)
 end
@@ -526,19 +526,19 @@ end
 Add a profile for your protocol:
 
 ```elixir
-# lib/agent_ex/loop/profile.ex
+# lib/agentic/loop/profile.ex
 def config(:codex) do
   %{
     name: :codex,
     protocol: :codex,
     transport_type: :local_agent,
     stages: [
-      AgentEx.Loop.Stages.ContextGuard,
-      AgentEx.Loop.Stages.ProgressInjector,
-      AgentEx.Loop.Stages.CLIExecutor,
-      AgentEx.Loop.Stages.ModeRouter,
-      AgentEx.Loop.Stages.ToolExecutor,
-      AgentEx.Loop.Stages.CommitmentGate
+      Agentic.Loop.Stages.ContextGuard,
+      Agentic.Loop.Stages.ProgressInjector,
+      Agentic.Loop.Stages.CLIExecutor,
+      Agentic.Loop.Stages.ModeRouter,
+      Agentic.Loop.Stages.ToolExecutor,
+      Agentic.Loop.Stages.CommitmentGate
     ],
     config: %{
       max_turns: 50,
@@ -594,8 +594,8 @@ Always handle subprocess exit:
 
 ## Related Files
 
-- `lib/agent_ex/agent_protocol.ex` — Core behaviour
-- `lib/agent_ex/agent_protocol/cli.ex` — CLI behaviour  
-- `lib/agent_ex/protocol/claude_code.ex` — Reference implementation
-- `lib/agent_ex/protocol/open_code.ex` — Alternative implementation
-- `lib/agent_ex/loop/stages/cli_executor.ex` — Uses protocols
+- `lib/agentic/agent_protocol.ex` — Core behaviour
+- `lib/agentic/agent_protocol/cli.ex` — CLI behaviour  
+- `lib/agentic/protocol/claude_code.ex` — Reference implementation
+- `lib/agentic/protocol/open_code.ex` — Alternative implementation
+- `lib/agentic/loop/stages/cli_executor.ex` — Uses protocols

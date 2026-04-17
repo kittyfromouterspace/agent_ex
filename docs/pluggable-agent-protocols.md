@@ -2,11 +2,11 @@
 
 ## Overview
 
-This document describes an extensible architecture for supporting multiple agent backends in AgentEx. The key insight is treating CLI-based agents (Claude Code, OpenCode, etc.) as **stateful agent wire protocols** — distinct from the stateless LLM transports used for API-based models.
+This document describes an extensible architecture for supporting multiple agent backends in Agentic. The key insight is treating CLI-based agents (Claude Code, OpenCode, etc.) as **stateful agent wire protocols** — distinct from the stateless LLM transports used for API-based models.
 
 ## Motivation
 
-Currently, AgentEx supports LLM-based agents via the `llm_chat` callback, which assumes a stateless request/response pattern. However, CLI-based agents like Claude Code and OpenCode operate differently:
+Currently, Agentic supports LLM-based agents via the `llm_chat` callback, which assumes a stateless request/response pattern. However, CLI-based agents like Claude Code and OpenCode operate differently:
 
 - **Long-running sessions** with persistent state
 - **Interactive protocol** with setup/teardown sequences  
@@ -19,13 +19,13 @@ Instead of forcing these into the LLM transport model, we introduce a pluggable 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          AgentEx.Run                                    │
+│                          Agentic.Run                                    │
 │                    (entry point unchanged)                              │
 └─────────────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        AgentEx.Profile                                  │
+│                        Agentic.Profile                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  :agentic        → Profile with LLM stages                             │
 │  :claude_code   → Profile with CLI protocol stages                    │
@@ -34,20 +34,20 @@ Instead of forcing these into the LLM transport model, we introduce a pluggable 
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                     AgentEx.AgentProtocol                              │
+│                     Agentic.AgentProtocol                              │
 │                    (Behaviour - contract)                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  Transport Type: :llm | :local_agent                                   │
 │                                                                     │
 │  Implementations:                                                    │
-│    - AgentEx.Protocol.LLM (existing callbacks-based)               │
-│    - AgentEx.Protocol.ClaudeCode                                     │
-│    - AgentEx.Protocol.OpenCode                                       │
+│    - Agentic.Protocol.LLM (existing callbacks-based)               │
+│    - Agentic.Protocol.ClaudeCode                                     │
+│    - Agentic.Protocol.OpenCode                                       │
 └─────────────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    AgentEx.Protocol.Registry                           │
+│                    Agentic.Protocol.Registry                           │
 │              (discovers and manages backends)                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -59,7 +59,7 @@ Instead of forcing these into the LLM transport model, we introduce a pluggable 
 A transport type categorizes how the agent communicates:
 
 ```elixir
-defmodule AgentEx.Protocol do
+defmodule Agentic.Protocol do
   @type transport_type :: :llm | :local_agent
   
   @doc "Returns the transport type for this protocol"
@@ -73,7 +73,7 @@ end
 ### Agent Protocol Behaviour
 
 ```elixir
-defmodule AgentEx.AgentProtocol do
+defmodule Agentic.AgentProtocol do
   @moduledoc """
   Behaviour for agent communication protocols.
   
@@ -81,7 +81,7 @@ defmodule AgentEx.AgentProtocol do
   session management, or execution models.
   """
 
-  alias AgentEx.Loop.Context
+  alias Agentic.Loop.Context
 
   @type session_id :: binary()
   @type protocol_response :: %{
@@ -120,7 +120,7 @@ defmodule AgentEx.AgentProtocol do
     iodata()
 
   @doc "Return the transport type"
-  @callback transport_type() :: AgentEx.Protocol.transport_type()
+  @callback transport_type() :: Agentic.Protocol.transport_type()
 
   # --- Optional callbacks ---
 
@@ -135,14 +135,14 @@ end
 For local agent protocols, we add a helper behaviour:
 
 ```elixir
-defmodule AgentEx.AgentProtocol.CLI do
+defmodule Agentic.AgentProtocol.CLI do
   @moduledoc """
   Behaviour for CLI-based local agent protocols.
   
   Extends AgentProtocol with CLI-specific lifecycle and configuration.
   """
 
-  alias AgentEx.AgentProtocol
+  alias Agentic.AgentProtocol
 
   @type cli_config :: %{
     required(:command) => String.t(),
@@ -166,7 +166,7 @@ defmodule AgentEx.AgentProtocol.CLI do
   # Inherit all AgentProtocol callbacks
   defmacro __using__(opts) do
     quote do
-      @behaviour AgentEx.AgentProtocol
+      @behaviour Agentic.AgentProtocol
       @behaviour unquote(__MODULE__)
     end
   end
@@ -176,7 +176,7 @@ end
 ## Protocol Registry
 
 ```elixir
-defmodule AgentEx.Protocol.Registry do
+defmodule Agentic.Protocol.Registry do
   @moduledoc """
   Registry for agent protocol implementations.
   
@@ -220,11 +220,11 @@ end
 Profiles declare which protocol to use:
 
 ```elixir
-defmodule AgentEx.Loop.Profile do
+defmodule Agentic.Loop.Profile do
   @type profile_config :: %{
     name: atom(),
     protocol: atom(),
-    transport_type: AgentEx.Protocol.transport_type(),
+    transport_type: Agentic.Protocol.transport_type(),
     stages: [module()],
     config: map()
   }
@@ -235,12 +235,12 @@ defmodule AgentEx.Loop.Profile do
       protocol: :claude_code,
       transport_type: :local_agent,
       stages: [
-        AgentEx.Loop.Stages.ContextGuard,
-        AgentEx.Loop.Stages.ProgressInjector,
-        AgentEx.Loop.Stages.CLIExecutor,      # replaces LLMCall
-        AgentEx.Loop.Stages.ModeRouter,
-        AgentEx.Loop.Stages.ToolExecutor,
-        AgentEx.Loop.Stages.CommitmentGate
+        Agentic.Loop.Stages.ContextGuard,
+        Agentic.Loop.Stages.ProgressInjector,
+        Agentic.Loop.Stages.CLIExecutor,      # replaces LLMCall
+        Agentic.Loop.Stages.ModeRouter,
+        Agentic.Loop.Stages.ToolExecutor,
+        Agentic.Loop.Stages.CommitmentGate
       ],
       config: %{
         max_turns: 50,
@@ -259,12 +259,12 @@ defmodule AgentEx.Loop.Profile do
       protocol: :llm,
       transport_type: :llm,
       stages: [
-        AgentEx.Loop.Stages.ContextGuard,
-        AgentEx.Loop.Stages.ProgressInjector,
-        AgentEx.Loop.Stages.LLMCall,          # LLM transport
-        AgentEx.Loop.Stages.ModeRouter,
-        AgentEx.Loop.Stages.ToolExecutor,
-        AgentEx.Loop.Stages.CommitmentGate
+        Agentic.Loop.Stages.ContextGuard,
+        Agentic.Loop.Stages.ProgressInjector,
+        Agentic.Loop.Stages.LLMCall,          # LLM transport
+        Agentic.Loop.Stages.ModeRouter,
+        Agentic.Loop.Stages.ToolExecutor,
+        Agentic.Loop.Stages.CommitmentGate
       ],
       config: %{
         max_turns: 50,
@@ -280,16 +280,16 @@ end
 The CLI executor stage replaces LLMCall for local agent protocols:
 
 ```elixir
-defmodule AgentEx.Loop.Stages.CLIExecutor do
+defmodule Agentic.Loop.Stages.CLIExecutor do
   @moduledoc """
   Executes agent prompts via CLI-based local agent protocol.
   
   Handles session lifecycle, streaming, and response parsing.
   """
 
-  alias AgentEx.{Loop.Context, Protocol.Registry}
+  alias Agentic.{Loop.Context, Protocol.Registry}
 
-  @behaviour AgentEx.Loop.Stage
+  @behaviour Agentic.Loop.Stage
 
   @impl true
   def call(ctx, next) do
@@ -310,7 +310,7 @@ defmodule AgentEx.Loop.Stages.CLIExecutor do
   end
 
   defp resolve_protocol(ctx) do
-    profile_config = AgentEx.Loop.Profile.config(ctx.profile)
+    profile_config = Agentic.Loop.Profile.config(ctx.profile)
     protocol_name = profile_config[:protocol] || :llm
     
     case Registry.lookup(protocol_name) do
@@ -335,7 +335,7 @@ end
 The context struct gains protocol-specific fields:
 
 ```elixir
-defmodule AgentEx.Loop.Context do
+defmodule Agentic.Loop.Context do
   defstruct [
     # ... existing fields ...
     
@@ -351,14 +351,14 @@ end
 ## Implementation Example: Claude Code
 
 ```elixir
-defmodule AgentEx.Protocol.ClaudeCode do
+defmodule Agentic.Protocol.ClaudeCode do
   @moduledoc """
   Claude Code CLI protocol implementation.
   
   Communicates via `claude -p --output-format stream-json` subprocess.
   """
 
-  use AgentEx.AgentProtocol.CLI
+  use Agentic.AgentProtocol.CLI
 
   @cli_name "claude"
   @default_args [
@@ -464,17 +464,17 @@ end
 At application startup:
 
 ```elixir
-defmodule AgentEx.Application do
+defmodule Agentic.Application do
   def start(_type, _args) do
     children = [
-      AgentEx.Protocol.Registry,
+      Agentic.Protocol.Registry,
       # ... other children ...
     ]
     
     # Register built-in protocols
-    AgentEx.Protocol.Registry.register(:claude_code, AgentEx.Protocol.ClaudeCode)
-    AgentEx.Protocol.Registry.register(:opencode, AgentEx.Protocol.OpenCode)
-    AgentEx.Protocol.Registry.register(:llm, AgentEx.Protocol.LLM)
+    Agentic.Protocol.Registry.register(:claude_code, Agentic.Protocol.ClaudeCode)
+    Agentic.Protocol.Registry.register(:opencode, Agentic.Protocol.OpenCode)
+    Agentic.Protocol.Registry.register(:llm, Agentic.Protocol.LLM)
     
     Supervisor.start_link(children, strategy: :one_for_one)
   end
@@ -486,7 +486,7 @@ end
 The existing callback system remains, but gets protocol-aware:
 
 ```elixir
-defmodule AgentEx.AgentExCallbacks do
+defmodule Agentic.AgenticCallbacks do
   def build(opts) do
     # ... existing callbacks ...
     
@@ -513,20 +513,20 @@ end
 
 ### Files Created
 
-- `lib/agent_ex/protocol.ex` — Transport type definitions
-- `lib/agent_ex/agent_protocol.ex` — Core protocol behaviour
-- `lib/agent_ex/agent_protocol/cli.ex` — CLI-specific behaviour extensions
-- `lib/agent_ex/protocol/registry.ex` — Protocol registry GenServer
-- `lib/agent_ex/protocol/llm.ex` — LLM wrapper protocol
-- `lib/agent_ex/protocol/claude_code.ex` — Claude Code CLI protocol
-- `lib/agent_ex/protocol/open_code.ex` — OpenCode CLI protocol
-- `lib/agent_ex/loop/stages/cli_executor.ex` — CLI executor stage
+- `lib/agentic/protocol.ex` — Transport type definitions
+- `lib/agentic/agent_protocol.ex` — Core protocol behaviour
+- `lib/agentic/agent_protocol/cli.ex` — CLI-specific behaviour extensions
+- `lib/agentic/protocol/registry.ex` — Protocol registry GenServer
+- `lib/agentic/protocol/llm.ex` — LLM wrapper protocol
+- `lib/agentic/protocol/claude_code.ex` — Claude Code CLI protocol
+- `lib/agentic/protocol/open_code.ex` — OpenCode CLI protocol
+- `lib/agentic/loop/stages/cli_executor.ex` — CLI executor stage
 
 ### Open Questions — Answered
 
 #### Session Persistence
 
-**Answer**: Use Mneme for session persistence. The CLI protocol implementations store session state in `:persistent_term` for runtime access. For persistence across process restarts, we can serialize the session config to Mneme's `mneme_entries` with entry type `session_summary` or a dedicated schema. The session ID can be stored to allow resumption.
+**Answer**: Use Recollect for session persistence. The CLI protocol implementations store session state in `:persistent_term` for runtime access. For persistence across process restarts, we can serialize the session config to Recollect's `recollect_entries` with entry type `session_summary` or a dedicated schema. The session ID can be stored to allow resumption.
 
 #### MCP Integration
 

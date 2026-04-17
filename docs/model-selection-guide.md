@@ -1,10 +1,10 @@
 # Model Selection Integration Guide
 
-How to use and observe AgentEx's intentional model selection system.
+How to use and observe Agentic's intentional model selection system.
 
 ## Overview
 
-AgentEx supports two model selection modes:
+Agentic supports two model selection modes:
 
 - **Manual mode** (default, backward-compatible) — you pick a tier (`:primary`, `:lightweight`) and the router resolves the best healthy route from the catalog.
 - **Auto mode** — the router analyses the request for complexity and required capabilities, then selects the best model based on your preference (cost or speed).
@@ -14,7 +14,7 @@ AgentEx supports two model selection modes:
 ### Manual Mode (Default)
 
 ```elixir
-AgentEx.run(
+Agentic.run(
   prompt: "Refactor the auth module",
   workspace: "/path/to/project",
   callbacks: %{llm_chat: &my_llm_chat/1},
@@ -25,7 +25,7 @@ AgentEx.run(
 ### Auto Mode — Optimize for Price
 
 ```elixir
-AgentEx.run(
+Agentic.run(
   prompt: "Refactor the auth module",
   workspace: "/path/to/project",
   callbacks: %{llm_chat: &my_llm_chat/1},
@@ -37,7 +37,7 @@ AgentEx.run(
 ### Auto Mode — Optimize for Speed
 
 ```elixir
-AgentEx.run(
+Agentic.run(
   prompt: "Refactor the auth module",
   workspace: "/path/to/project",
   callbacks: %{llm_chat: &my_llm_chat/1},
@@ -49,7 +49,7 @@ AgentEx.run(
 ### Free Models Only
 
 ```elixir
-AgentEx.run(
+Agentic.run(
   prompt: "Write a test for the auth module",
   workspace: "/path/to/project",
   callbacks: %{llm_chat: &my_llm_chat/1},
@@ -70,7 +70,7 @@ When `model_filter: :free_only` is set, only models with the `:free` capability 
 | `:model_filter` | `:free_only`, `nil` | `nil` | Hard filter on candidates. `:free_only` rejects all non-free models |
 | `:model_tier` | `:primary`, `:lightweight`, `:any` | `:primary` | Tier constraint (manual mode only) |
 
-Both options are also accepted by `AgentEx.resume/1`.
+Both options are also accepted by `Agentic.resume/1`.
 
 ## Auto Mode Architecture
 
@@ -112,13 +112,13 @@ User Request
 
 ## Telemetry Events
 
-All telemetry events use the standard `[:agent_ex]` prefix. Attach handlers with `:telemetry.attach/4` or `:telemetry.attach_many/4`.
+All telemetry events use the standard `[:agentic]` prefix. Attach handlers with `:telemetry.attach/4` or `:telemetry.attach_many/4`.
 
 ### Analysis Events
 
-Emitted by `AgentEx.ModelRouter.Analyzer` when classifying a request.
+Emitted by `Agentic.ModelRouter.Analyzer` when classifying a request.
 
-#### `[:agent_ex, :model_router, :analysis, :start]`
+#### `[:agentic, :model_router, :analysis, :start]`
 
 Fired before analysis begins.
 
@@ -131,7 +131,7 @@ Fired before analysis begins.
 | `session_id` | `string \| nil` | Session that triggered analysis |
 | `request_length` | `integer` | Character count of the request |
 
-#### `[:agent_ex, :model_router, :analysis, :stop]`
+#### `[:agentic, :model_router, :analysis, :stop]`
 
 Fired after analysis completes.
 
@@ -150,7 +150,7 @@ Fired after analysis completes.
 | `estimated_input_tokens` | `integer` | Rough input token estimate |
 | `required_capabilities` | `[atom]` | List of required capability atoms |
 
-#### `[:agent_ex, :model_router, :analysis, :fallback]`
+#### `[:agentic, :model_router, :analysis, :fallback]`
 
 Fired when LLM-based analysis fails and falls back to heuristic.
 
@@ -164,13 +164,13 @@ Fired when LLM-based analysis fails and falls back to heuristic.
 | `to` | `:heuristic` | Fallback method |
 | `reason` | `string` | Error description |
 
-#### `[:agent_ex, :model_router, :analysis, :parse_failure]`
+#### `[:agentic, :model_router, :analysis, :parse_failure]`
 
 Fired when the LLM returns an unparseable analysis response.
 
 ### Filter Events
 
-#### `[:agent_ex, :model_router, :filter, :rejected]`
+#### `[:agentic, :model_router, :filter, :rejected]`
 
 Fired when a model filter rejects all candidates.
 
@@ -184,9 +184,9 @@ Fired when a model filter rejects all candidates.
 
 ### Selection Events
 
-Emitted by `AgentEx.ModelRouter.Selector` when ranking and choosing a model.
+Emitted by `Agentic.ModelRouter.Selector` when ranking and choosing a model.
 
-#### `[:agent_ex, :model_router, :selection, :start]`
+#### `[:agentic, :model_router, :selection, :start]`
 
 Fired before selection begins.
 
@@ -200,7 +200,7 @@ Fired before selection begins.
 | `model_filter` | `:free_only` \| `nil` | Active model filter |
 | `request_length` | `integer` | Character count of the request |
 
-#### `[:agent_ex, :model_router, :selection, :stop]`
+#### `[:agentic, :model_router, :selection, :stop]`
 
 Fired after selection completes with full ranking data.
 
@@ -225,9 +225,9 @@ Fired after selection completes with full ranking data.
 
 ### Route Resolution Events
 
-Emitted by `AgentEx.ModelRouter` during route resolution.
+Emitted by `Agentic.ModelRouter` during route resolution.
 
-#### `[:agent_ex, :model_router, :resolve, :start]`
+#### `[:agentic, :model_router, :resolve, :start]`
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -235,7 +235,7 @@ Emitted by `AgentEx.ModelRouter` during route resolution.
 | `session_id` | `string \| nil` | Session |
 | `selection_mode` | `:manual` \| `:auto` | Active selection mode |
 
-#### `[:agent_ex, :model_router, :resolve, :stop]`
+#### `[:agentic, :model_router, :resolve, :stop]`
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -254,9 +254,9 @@ Emitted by `AgentEx.ModelRouter` during route resolution.
 
 ### LLM Call Integration Events
 
-The existing `[:agent_ex, :llm_call, :start]` and `[:agent_ex, :llm_call, :stop]` events now include `model_selection_mode` in their metadata.
+The existing `[:agentic, :llm_call, :start]` and `[:agentic, :llm_call, :stop]` events now include `model_selection_mode` in their metadata.
 
-#### `[:agent_ex, :model_router, :auto, :selected]`
+#### `[:agentic, :model_router, :auto, :selected]`
 
 Fired by `LLMCall` when auto mode successfully resolves a model. Contains the full analysis alongside the chosen route — the single best event for visualizing model selection decisions.
 
@@ -276,7 +276,7 @@ Fired by `LLMCall` when auto mode successfully resolves a model. Contains the fu
 | `selected_model` | `string` | Chosen model ID |
 | `selected_provider` | `string` | Chosen provider |
 
-#### `[:agent_ex, :model_router, :auto, :fallback]`
+#### `[:agentic, :model_router, :auto, :fallback]`
 
 Fired when auto mode fails and falls back to manual tier-based routing.
 
@@ -293,7 +293,7 @@ Fired when auto mode fails and falls back to manual tier-based routing.
 ```elixir
 :telemetry.attach(
   "model-selection-logger",
-  [:agent_ex, :model_router, :auto, :selected],
+  [:agentic, :model_router, :auto, :selected],
   fn _event, _measurements, metadata, _config ->
     IO.puts("""
     [Model Selected] #{metadata[:selected_provider]}/#{metadata[:selected_model]}
@@ -313,9 +313,9 @@ Fired when auto mode fails and falls back to manual tier-based routing.
 :telemetry.attach_many(
   "model-analysis-collector",
   [
-    [:agent_ex, :model_router, :analysis, :stop],
-    [:agent_ex, :model_router, :selection, :stop],
-    [:agent_ex, :model_router, :auto, :selected]
+    [:agentic, :model_router, :analysis, :stop],
+    [:agentic, :model_router, :selection, :stop],
+    [:agentic, :model_router, :auto, :selected]
   ],
   fn event, measurements, metadata, _config ->
     # Send to your observability backend
@@ -345,14 +345,14 @@ For a model selection dashboard, the most useful events are:
 ### Direct Analysis (No LLM Call)
 
 ```elixir
-{:ok, analysis} = AgentEx.ModelRouter.Analyzer.analyze_heuristic("Read config.json and fix the bug")
+{:ok, analysis} = Agentic.ModelRouter.Analyzer.analyze_heuristic("Read config.json and fix the bug")
 # => %{complexity: :moderate, needs_vision: false, needs_reasoning: false, ...}
 ```
 
 ### Direct Selection
 
 ```elixir
-{:ok, route, analysis} = AgentEx.ModelRouter.auto_select(
+{:ok, route, analysis} = Agentic.ModelRouter.auto_select(
   "Explain quantum computing",
   :optimize_price,
   llm_chat: &my_llm/1,
@@ -366,13 +366,13 @@ For a model selection dashboard, the most useful events are:
 
 ```elixir
 analysis = %{complexity: :complex, needs_vision: false, needs_reasoning: true, ...}
-ranked = AgentEx.ModelRouter.Selector.rank(analysis, :optimize_speed)
+ranked = Agentic.ModelRouter.Selector.rank(analysis, :optimize_speed)
 # => [{%Model{provider: :anthropic, id: "claude-sonnet-4"}, -1.5}, ...]
 ```
 
 ### Preference Parsing
 
 ```elixir
-{:ok, pref} = AgentEx.ModelRouter.Preference.parse("price")
+{:ok, pref} = Agentic.ModelRouter.Preference.parse("price")
 # => {:ok, :optimize_price}
 ```

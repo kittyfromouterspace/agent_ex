@@ -1,53 +1,53 @@
-# ACP Integration Spec: Agent Client Protocol for AgentEx
+# ACP Integration Spec: Agent Client Protocol for Agentic
 
 ## Status: IN PROGRESS
 
 ## Implementation Progress
 
 ### Phase 1: ACP Client Core -- COMPLETE
-- [x] `AgentEx.Protocol.ACP.Types` -- type definitions and conversions
-- [x] `AgentEx.Protocol.ACP.Client` -- JSON-RPC 2.0 stdio client with listener
-- [x] `AgentEx.Protocol.ACP.Session` -- initialize/authenticate/session lifecycle
-- [x] `AgentEx.Protocol.ACP.Permission` -- bridge ACP permissions to AgentEx
-- [x] `AgentEx.Protocol.ACP` -- AgentProtocol behaviour implementation
-- [x] `AgentEx.Loop.Stages.ACPExecutor` -- ACP-specific executor stage
-- [x] Add `:acp` transport type to `AgentEx.Protocol`
+- [x] `Agentic.Protocol.ACP.Types` -- type definitions and conversions
+- [x] `Agentic.Protocol.ACP.Client` -- JSON-RPC 2.0 stdio client with listener
+- [x] `Agentic.Protocol.ACP.Session` -- initialize/authenticate/session lifecycle
+- [x] `Agentic.Protocol.ACP.Permission` -- bridge ACP permissions to Agentic
+- [x] `Agentic.Protocol.ACP` -- AgentProtocol behaviour implementation
+- [x] `Agentic.Loop.Stages.ACPExecutor` -- ACP-specific executor stage
+- [x] Add `:acp` transport type to `Agentic.Protocol`
 - [x] Allow tuple keys in `Protocol.Registry`
-- [x] ACP profile in `AgentEx.Loop.Profile`
+- [x] ACP profile in `Agentic.Loop.Profile`
 - [x] Application startup registration with config-driven agents
 
 ### Phase 2: Discovery & Agent Quirks -- IN PROGRESS
-- [x] `AgentEx.Protocol.ACP.Discovery` -- 15-agent known DB + config + env var
-- [x] `AgentEx.Protocol.ACP.Quirks` -- agent-specific workarounds (from acpx)
+- [x] `Agentic.Protocol.ACP.Discovery` -- 15-agent known DB + config + env var
+- [x] `Agentic.Protocol.ACP.Quirks` -- agent-specific workarounds (from acpx)
 - [ ] ACP-specific telemetry events
 - [ ] Integration test with mock subprocess
 
 ### Tests -- IN PROGRESS
-- [x] `test/agent_ex/protocol/acp/types_test.exs` -- 15 tests
-- [x] `test/agent_ex/protocol/acp/permission_test.exs` -- 11 tests
-- [x] `test/agent_ex/protocol/acp/discovery_test.exs` -- 8 tests
-- [x] `test/agent_ex/protocol/acp/quirks_test.exs` -- 16 tests
-- [ ] `test/agent_ex/protocol/acp/client_test.exs` -- mock subprocess tests
-- [ ] `test/agent_ex/protocol/acp/session_test.exs` -- mock session tests
+- [x] `test/agentic/protocol/acp/types_test.exs` -- 15 tests
+- [x] `test/agentic/protocol/acp/permission_test.exs` -- 11 tests
+- [x] `test/agentic/protocol/acp/discovery_test.exs` -- 8 tests
+- [x] `test/agentic/protocol/acp/quirks_test.exs` -- 16 tests
+- [ ] `test/agentic/protocol/acp/client_test.exs` -- mock subprocess tests
+- [ ] `test/agentic/protocol/acp/session_test.exs` -- mock session tests
 
 ### Files Changed/Created
 ```
-lib/agent_ex/protocol.ex                          -- added :acp transport
-lib/agent_ex/protocol/registry.ex                  -- tuple key support
-lib/agent_ex/protocol/acp.ex                       -- NEW: main ACP protocol
-lib/agent_ex/protocol/acp/types.ex                  -- NEW: type definitions
-lib/agent_ex/protocol/acp/client.ex                 -- NEW: JSON-RPC client
-lib/agent_ex/protocol/acp/session.ex               -- NEW: session lifecycle
-lib/agent_ex/protocol/acp/permission.ex            -- NEW: permission bridge
-lib/agent_ex/protocol/acp/discovery.ex             -- NEW: agent discovery
-lib/agent_ex/protocol/acp/quirks.ex                -- NEW: agent-specific quirks
-lib/agent_ex/loop/stages/acp_executor.ex           -- NEW: ACP executor stage
-lib/agent_ex/loop/profile.ex                       -- added ACP profile
-lib/agent_ex/application.ex                       -- ACP registration
-test/agent_ex/protocol/acp/types_test.exs           -- NEW
-test/agent_ex/protocol/acp/permission_test.exs     -- NEW
-test/agent_ex/protocol/acp/discovery_test.exs      -- NEW
-test/agent_ex/protocol/acp/quirks_test.exs         -- NEW
+lib/agentic/protocol.ex                          -- added :acp transport
+lib/agentic/protocol/registry.ex                  -- tuple key support
+lib/agentic/protocol/acp.ex                       -- NEW: main ACP protocol
+lib/agentic/protocol/acp/types.ex                  -- NEW: type definitions
+lib/agentic/protocol/acp/client.ex                 -- NEW: JSON-RPC client
+lib/agentic/protocol/acp/session.ex               -- NEW: session lifecycle
+lib/agentic/protocol/acp/permission.ex            -- NEW: permission bridge
+lib/agentic/protocol/acp/discovery.ex             -- NEW: agent discovery
+lib/agentic/protocol/acp/quirks.ex                -- NEW: agent-specific quirks
+lib/agentic/loop/stages/acp_executor.ex           -- NEW: ACP executor stage
+lib/agentic/loop/profile.ex                       -- added ACP profile
+lib/agentic/application.ex                       -- ACP registration
+test/agentic/protocol/acp/types_test.exs           -- NEW
+test/agentic/protocol/acp/permission_test.exs     -- NEW
+test/agentic/protocol/acp/discovery_test.exs      -- NEW
+test/agentic/protocol/acp/quirks_test.exs         -- NEW
 docs/acp-integration-spec.md                       -- this file
 ```
 
@@ -61,7 +61,7 @@ The acpx codebase (https://github.com/openclaw/acpx) was studied in depth and in
 
 ## 1. Background & Problem Statement
 
-AgentEx currently supports three CLI-based local agent protocols (Claude Code, OpenCode, Codex), each implemented as a bespoke module with its own wire format, parsing logic, and session management. Adding a new agent requires writing a new protocol module from scratch.
+Agentic currently supports three CLI-based local agent protocols (Claude Code, OpenCode, Codex), each implemented as a bespoke module with its own wire format, parsing logic, and session management. Adding a new agent requires writing a new protocol module from scratch.
 
 Meanwhile, the **Agent Client Protocol (ACP)** -- https://agentclientprotocol.com -- has emerged as a standard for editor-to-agent communication. **30+ coding agents now implement ACP**, including:
 
@@ -179,7 +179,7 @@ Client                    Agent
 
 1. **Thinking mode**: ACP doesn't have a standard way to toggle thinking. Kimi handles this internally. We can pass it as a `session/set_mode` or via custom `_meta` fields.
 
-2. **Yolo mode**: Kimi's `--yolo` / `/yolo` auto-approve mode. In ACP, this maps to the client always returning `allow_always` for `session/request_permission`. AgentEx can configure this behavior.
+2. **Yolo mode**: Kimi's `--yolo` / `/yolo` auto-approve mode. In ACP, this maps to the client always returning `allow_always` for `session/request_permission`. Agentic can configure this behavior.
 
 3. **Slash commands**: Kimi has `/login`, `/clear`, `/compact`, `/sessions`, etc. ACP has `AvailableCommandsUpdate` for advertising slash commands to the client. We should surface these.
 
@@ -194,14 +194,14 @@ Client                    Agent
 ### 4.1 Architecture
 
 ```
-                           AgentEx
+                           Agentic
                              |
                     +--------+--------+
                     |  Protocol Registry|
                     +--------+--------+
                              |
                     +--------+--------+
-                    | AgentEx.Protocol |
+                    | Agentic.Protocol |
                     |      .ACP       |  <-- NEW: generic ACP client
                     +--------+--------+
                              |
@@ -221,12 +221,12 @@ Client                    Agent
 
 ### 4.2 New Transport Type: `:acp`
 
-Add `:acp` to `AgentEx.Protocol.transport_type/0`. This is semantically distinct from `:local_agent` -- while ACP agents run locally, the protocol is standardized rather than bespoke.
+Add `:acp` to `Agentic.Protocol.transport_type/0`. This is semantically distinct from `:local_agent` -- while ACP agents run locally, the protocol is standardized rather than bespoke.
 
 ### 4.3 File Structure
 
 ```
-lib/agent_ex/
+lib/agentic/
   protocol/
     acp.ex                    # Generic ACP protocol (implements AgentProtocol)
     acp/
@@ -241,7 +241,7 @@ lib/agent_ex/
 
 ### 4.4 Core Modules
 
-#### `AgentEx.Protocol.ACP` (implements `AgentEx.AgentProtocol`)
+#### `Agentic.Protocol.ACP` (implements `Agentic.AgentProtocol`)
 
 One module that can talk to **any** ACP agent. The agent identity (kimi, cursor, etc.) is a parameter, not a separate module.
 
@@ -268,7 +268,7 @@ Maps `AgentProtocol` callbacks to ACP methods:
 | `available?/0` | Check `System.find_executable(command)` |
 | `transport_type/0` | `:acp` |
 
-#### `AgentEx.Protocol.ACP.Client` -- JSON-RPC 2.0 over stdio
+#### `Agentic.Protocol.ACP.Client` -- JSON-RPC 2.0 over stdio
 
 Low-level JSON-RPC client. Handles:
 
@@ -281,7 +281,7 @@ Low-level JSON-RPC client. Handles:
 Key difference from existing CLI protocols: **bidirectional**. The agent can call methods on the client (permission requests, file reads, terminal creation). This requires a listener loop running alongside the request/response flow.
 
 ```elixir
-defmodule AgentEx.Protocol.ACP.Client do
+defmodule Agentic.Protocol.ACP.Client do
   defstruct [:port, :request_id, :pending_requests, :notification_handler]
 
   def start_link(command, args, env, opts \\ [])
@@ -292,7 +292,7 @@ defmodule AgentEx.Protocol.ACP.Client do
 end
 ```
 
-#### `AgentEx.Protocol.ACP.Discovery` -- Auto-detect ACP agents
+#### `Agentic.Protocol.ACP.Discovery` -- Auto-detect ACP agents
 
 Probes the system for ACP-capable CLIs:
 
@@ -322,7 +322,7 @@ Probes the system for ACP-capable CLIs:
 
 **Result**: Any ACP-compatible CLI installed on the system is automatically available. No per-agent protocol modules needed.
 
-#### `AgentEx.Protocol.ACP.Session` -- Session lifecycle
+#### `Agentic.Protocol.ACP.Session` -- Session lifecycle
 
 Wraps the ACP session flow:
 
@@ -345,9 +345,9 @@ def cancel(session) do
 end
 ```
 
-#### `AgentEx.Protocol.ACP.Permission` -- Permission handling
+#### `Agentic.Protocol.ACP.Permission` -- Permission handling
 
-Bridges ACP `session/request_permission` to AgentEx's tool permission system:
+Bridges ACP `session/request_permission` to Agentic's tool permission system:
 
 ```elixir
 def handle_request(session, permission_request, ctx) do
@@ -359,13 +359,13 @@ def handle_request(session, permission_request, ctx) do
 end
 ```
 
-Maps ACP permission option kinds to AgentEx concepts:
+Maps ACP permission option kinds to Agentic concepts:
 - `allow_once` -> `:auto` for this call
 - `allow_always` -> update `tool_permissions` map
 - `reject_once` -> deny this call
 - `reject_always` -> deny and cache
 
-#### `AgentEx.Protocol.ACP.Types` -- ACP type definitions
+#### `Agentic.Protocol.ACP.Types` -- ACP type definitions
 
 Shared type specs for ACP protocol types:
 - `ContentBlock` (text, image, audio, resource, resource_link)
@@ -376,16 +376,16 @@ Shared type specs for ACP protocol types:
 - `PermissionOption`, `RequestPermissionOutcome`
 
 Also provides conversion functions:
-- `to_agentex_messages/1` -- ACP ContentBlock[] -> AgentEx message format
-- `from_agentex_messages/1` -- AgentEx messages -> ACP ContentBlock[]
-- `tool_calls_to_pending/1` -- ACP tool_call updates -> AgentEx pending_tool_calls
+- `to_agentex_messages/1` -- ACP ContentBlock[] -> Agentic message format
+- `from_agentex_messages/1` -- Agentic messages -> ACP ContentBlock[]
+- `tool_calls_to_pending/1` -- ACP tool_call updates -> Agentic pending_tool_calls
 
 ### 4.5 Bidirectional Communication Architecture
 
 ACP is fundamentally bidirectional. The agent can call methods on the client. This is different from existing CLI protocols where communication is unidirectional (we send, they respond).
 
 ```
-AgentEx (Client)                    ACP Agent (subprocess)
+Agentic (Client)                    ACP Agent (subprocess)
        |                                      |
        |--- initialize ---------------------->|
        |<-- initialize resp ------------------|
@@ -408,7 +408,7 @@ AgentEx (Client)                    ACP Agent (subprocess)
 Implementation: A dedicated listener process receives all messages from the agent's stdout. It routes responses to waiting request callers via a `Registry`, and delivers notifications to a configured handler callback.
 
 ```elixir
-defmodule AgentEx.Protocol.ACP.ClientListener do
+defmodule Agentic.Protocol.ACP.ClientListener do
   use GenServer
 
   # Receives all stdout from the ACP agent process
@@ -420,7 +420,7 @@ end
 
 ### 4.6 Client Capabilities
 
-When AgentEx acts as an ACP client, it should advertise these capabilities:
+When Agentic acts as an ACP client, it should advertise these capabilities:
 
 ```elixir
 %{
@@ -433,19 +433,19 @@ When AgentEx acts as an ACP client, it should advertise these capabilities:
     terminal: true
   },
   clientInfo: %{
-    name: "agent_ex",
-    title: "AgentEx",
-    version: AgentEx.version()
+    name: "agentic",
+    title: "Agentic",
+    version: Agentic.version()
   }
 }
 ```
 
-This means AgentEx needs to implement the **Client side** of ACP too:
-- `fs/read_text_file` -- map to AgentEx workspace file reading
-- `fs/write_text_file` -- map to AgentEx workspace file writing
-- `terminal/create` -- map to AgentEx's bash execution capability
+This means Agentic needs to implement the **Client side** of ACP too:
+- `fs/read_text_file` -- map to Agentic workspace file reading
+- `fs/write_text_file` -- map to Agentic workspace file writing
+- `terminal/create` -- map to Agentic's bash execution capability
 
-These can delegate to existing AgentEx tool infrastructure via callbacks.
+These can delegate to existing Agentic tool infrastructure via callbacks.
 
 ### 4.7 Profile Integration
 
@@ -453,13 +453,13 @@ No new profiles needed. Instead, any existing profile can use an ACP agent by se
 
 ```elixir
 # Use Kimi via ACP with the agentic profile
-AgentEx.run(prompt, workspace: "/path",
+Agentic.run(prompt, workspace: "/path",
   profile: :agentic,
   protocol: {:acp, :kimi}
 )
 
 # Use Claude Agent via ACP
-AgentEx.run(prompt, workspace: "/path",
+Agentic.run(prompt, workspace: "/path",
   profile: :agentic,
   protocol: {:acp, :claude}
 )
@@ -471,7 +471,7 @@ The `CLIExecutor` stage already handles `transport_type: :local_agent`. We exten
 
 ```elixir
 # config/config.exs
-config :agent_ex, :acp,
+config :agentic, :acp,
   # Known ACP agents (appended to built-in list)
   agents: [
     %{name: :my_custom_agent, command: "my-agent", args: ["--acp"], display: "My Agent"}
@@ -493,14 +493,14 @@ Current registry uses atom keys. ACP agents use tuple keys `{:acp, agent_name}`:
 
 ```elixir
 # Register discovered ACP agents
-AgentEx.Protocol.Registry.register({:acp, :kimi}, AgentEx.Protocol.ACP)
+Agentic.Protocol.Registry.register({:acp, :kimi}, Agentic.Protocol.ACP)
 
 # Lookup
-{:ok, module} = AgentEx.Protocol.Registry.lookup({:acp, :kimi})
-# -> {:ok, AgentEx.Protocol.ACP}  (same module for all ACP agents)
+{:ok, module} = Agentic.Protocol.Registry.lookup({:acp, :kimi})
+# -> {:ok, Agentic.Protocol.ACP}  (same module for all ACP agents)
 
 # List all ACP agents
-AgentEx.Protocol.Registry.for_transport(:acp)
+Agentic.Protocol.Registry.for_transport(:acp)
 # -> [{:acp, :kimi}, {:acp, :claude}, {:acp, :cursor}, ...]
 ```
 
@@ -512,8 +512,8 @@ For convenience, auto-discovered agents get synthetic profiles:
 
 ```elixir
 # After discovering kimi, auto-create:
-AgentEx.Loop.Profile.put(:kimi_acp, %{
-  stages: AgentEx.Loop.Profile.stages(:claude_code),  # reuse CLI pipeline
+Agentic.Loop.Profile.put(:kimi_acp, %{
+  stages: Agentic.Loop.Profile.stages(:claude_code),  # reuse CLI pipeline
   config: %{
     max_turns: 50,
     protocol: {:acp, :kimi},
@@ -525,7 +525,7 @@ AgentEx.Loop.Profile.put(:kimi_acp, %{
 
 This means users can do:
 ```elixir
-AgentEx.run(prompt, workspace: "/path", profile: :kimi_acp)
+Agentic.run(prompt, workspace: "/path", profile: :kimi_acp)
 ```
 
 ## 5. Migration Path for Existing CLI Protocols
@@ -544,22 +544,22 @@ This eliminates ~800 lines of near-identical subprocess management code.
 ## 6. Phased Implementation Plan
 
 ### Phase 1: ACP Client Core
-- `AgentEx.Protocol.ACP.Types` -- type definitions and conversions
-- `AgentEx.Protocol.ACP.Client` -- JSON-RPC 2.0 stdio client with listener
-- `AgentEx.Protocol.ACP.Session` -- initialize/authenticate/session lifecycle
-- `AgentEx.Protocol.ACP` -- AgentProtocol implementation
-- Add `:acp` transport type to `AgentEx.Protocol`
+- `Agentic.Protocol.ACP.Types` -- type definitions and conversions
+- `Agentic.Protocol.ACP.Client` -- JSON-RPC 2.0 stdio client with listener
+- `Agentic.Protocol.ACP.Session` -- initialize/authenticate/session lifecycle
+- `Agentic.Protocol.ACP` -- AgentProtocol implementation
+- Add `:acp` transport type to `Agentic.Protocol`
 - Allow tuple keys in `Protocol.Registry`
 
 ### Phase 2: Discovery & Auto-Registration
-- `AgentEx.Protocol.ACP.Discovery` -- known agents DB + filesystem probing
-- `AgentEx.Protocol.ACP.Cache` -- ETS cache for discovery
-- `AgentEx.Protocol.ACP.Manifest` -- capability metadata from initialize
+- `Agentic.Protocol.ACP.Discovery` -- known agents DB + filesystem probing
+- `Agentic.Protocol.ACP.Cache` -- ETS cache for discovery
+- `Agentic.Protocol.ACP.Manifest` -- capability metadata from initialize
 - Auto-register discovered agents on startup
 - Synthetic profile generation for discovered agents
 
 ### Phase 3: Client Capabilities & Permission Handling
-- `AgentEx.Protocol.ACP.Permission` -- bridge ACP permissions to AgentEx
+- `Agentic.Protocol.ACP.Permission` -- bridge ACP permissions to Agentic
 - Implement `fs/read_text_file`, `fs/write_text_file` client methods
 - Implement `terminal/create` client method
 - `ACPExecutor` stage (or extend `CLIExecutor`)

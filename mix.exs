@@ -1,15 +1,16 @@
-defmodule AgentEx.MixProject do
+defmodule Agentic.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :agent_ex,
+      app: :agentic,
       version: "0.1.9",
       elixir: "~> 1.19",
       description: "A composable AI agent runtime",
       package: [
+        files: ~w(lib priv config README.md LICENSE mix.exs .formatter.exs),
         licenses: ["BSD-3-Clause"],
-        links: %{"GitHub" => "https://github.com/kittyfromouterspace/agent_ex"}
+        links: %{"GitHub" => "https://github.com/kittyfromouterspace/agentic"}
       ],
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -22,7 +23,7 @@ defmodule AgentEx.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {AgentEx.Application, []}
+      mod: {Agentic.Application, []}
     ]
   end
 
@@ -36,11 +37,8 @@ defmodule AgentEx.MixProject do
       {:yaml_elixir, "~> 2.9"},
       {:req, "~> 0.5"},
       {:nimble_options, "~> 1.1"},
-      # Mneme memory engine - now supports both PostgreSQL and libSQL
-      # {:mneme, git: "https://github.com/kittyfromouterspace/mneme.git", tag: "v0.4.4"},
-      {:mneme, path: "../mneme"},
-      {:ecto_sql, "~> 3.12"},
-      # Database drivers (optional - pick one based on your backend)
+      {:recollect, "~> 0.4"},
+      {:ecto_sql, "~> 3.12", optional: true},
       {:postgrex, "~> 0.19", optional: true},
       {:ecto_libsql, "~> 0.9", optional: true},
       {:ecto_sqlite3, "~> 0.18", optional: true},

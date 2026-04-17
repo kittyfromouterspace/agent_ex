@@ -1,5 +1,5 @@
-defmodule AgentEx.TestHelpers do
-  @moduledoc "Shared helpers for AgentEx tests."
+defmodule Agentic.TestHelpers do
+  @moduledoc "Shared helpers for Agentic tests."
 
   @doc "Build mock callbacks with optional overrides."
   def mock_callbacks(overrides \\ %{}) do
@@ -13,7 +13,7 @@ defmodule AgentEx.TestHelpers do
 
   def mock_llm_end_turn(_params) do
     {:ok,
-     %AgentEx.LLM.Response{
+     %Agentic.LLM.Response{
        content: [%{type: :text, text: "Hello! I'm here to help."}],
        stop_reason: :end_turn,
        usage: %{input_tokens: 100, output_tokens: 50, cache_read: 0, cache_write: 0},
@@ -23,7 +23,7 @@ defmodule AgentEx.TestHelpers do
 
   def mock_llm_tool_use(_params) do
     {:ok,
-     %AgentEx.LLM.Response{
+     %Agentic.LLM.Response{
        content: [
          %{type: :text, text: "Let me check that file."},
          %{
@@ -44,7 +44,7 @@ defmodule AgentEx.TestHelpers do
   end
 
   def create_test_workspace do
-    path = Path.join(System.tmp_dir!(), "agent_ex_test_#{:rand.uniform(999_999)}")
+    path = Path.join(System.tmp_dir!(), "agentic_test_#{:rand.uniform(999_999)}")
     File.mkdir_p!(path)
     ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(path) end)
     path
@@ -61,8 +61,8 @@ defmodule AgentEx.TestHelpers do
     ]
 
     opts = Keyword.merge(defaults, overrides)
-    ctx = AgentEx.Loop.Context.new(opts)
-    AgentEx.Tools.Activation.init(ctx)
+    ctx = Agentic.Loop.Context.new(opts)
+    Agentic.Tools.Activation.init(ctx)
   end
 
   @doc "Build a Context for agentic_planned mode tests."
@@ -91,8 +91,8 @@ defmodule AgentEx.TestHelpers do
         [{:approve, _} | _rest] ->
           {:approve, ctx}
 
-        [{:approve, _feedback, _ctx} | _rest] ->
-          {:approve, _feedback, ctx}
+        [{:approve, feedback, _ctx} | _rest] ->
+          {:approve, feedback, ctx}
 
         [{:abort, reason} | _rest] ->
           {:abort, reason}
@@ -113,7 +113,7 @@ defmodule AgentEx.TestHelpers do
         end)
 
       {:ok,
-       %AgentEx.LLM.Response{
+       %Agentic.LLM.Response{
          content: [%{type: :text, text: text}],
          stop_reason: :end_turn,
          usage: %{input_tokens: 100, output_tokens: 80, cache_read: 0, cache_write: 0},
