@@ -4,7 +4,7 @@ defmodule Agentic.MixProject do
   def project do
     [
       app: :agentic,
-      version: "0.1.9",
+      version: "0.2.0",
       elixir: "~> 1.19",
       description: "A composable AI agent runtime",
       package: [
