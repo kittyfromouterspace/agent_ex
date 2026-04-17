@@ -147,9 +147,9 @@ defmodule Agentic.Skill.Service do
   # --- Remote operations ---
 
   @doc """
-  Search for skills using the Vercel skills CLI (`npx skills find`).
+  Search for skills using the skills CLI (`bun x skills find`).
 
-  Falls back to GitHub code search API if `npx` is not available.
+  Falls back to GitHub code search API if `bun` is not available.
   The skills CLI does not require authentication.
 
   Options:

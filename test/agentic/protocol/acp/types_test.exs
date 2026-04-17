@@ -125,7 +125,7 @@ defmodule Agentic.Protocol.ACP.TypesTest do
     end
   end
 
-  describe "tool_call_to_agentex/1" do
+  describe "tool_call_to_agentic/1" do
     test "converts completed tool call with rawInput" do
       update = %{
         "toolCallId" => "call_001",
@@ -133,7 +133,7 @@ defmodule Agentic.Protocol.ACP.TypesTest do
         "rawInput" => %{"name" => "read_file", "arguments" => %{"path" => "/tmp/test"}}
       }
 
-      result = Types.tool_call_to_agentex(update)
+      result = Types.tool_call_to_agentic(update)
 
       assert result["id"] == "call_001"
       assert result["type"] == "function"
@@ -146,7 +146,7 @@ defmodule Agentic.Protocol.ACP.TypesTest do
         "title" => "Reading file"
       }
 
-      result = Types.tool_call_to_agentex(update)
+      result = Types.tool_call_to_agentic(update)
 
       assert result["id"] == "call_002"
       assert result["function"]["name"] == "unknown"
@@ -155,7 +155,7 @@ defmodule Agentic.Protocol.ACP.TypesTest do
     test "converts minimal tool call" do
       update = %{"toolCallId" => "call_003"}
 
-      result = Types.tool_call_to_agentex(update)
+      result = Types.tool_call_to_agentic(update)
 
       assert result["id"] == "call_003"
       assert result["function"]["name"] == "unknown"

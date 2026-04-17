@@ -68,4 +68,21 @@ mix test test/agentic/loop/engine_test.exs:42
 
 ## Versioning
 
-This library is consumed as a git dependency by Worth. When adding new functionality or making breaking changes, you **must** create a new git tag (e.g., `v0.3.0`) so that Worth's `mix.exs` can pin to a specific version. Follow semantic versioning.
+This library is consumed as a git dependency by Worth. When adding new functionality or making breaking changes, you **must** create a new git tag so that Worth's `mix.exs` can pin to a specific version. Follow semantic versioning.
+
+### Release SOP
+
+1. **Bump `version`** in `mix.exs` (line 7).
+2. **Update deps** if needed — verify `mix deps.get` resolves cleanly.
+3. **Run checks**: `mix format`, `mix test` — verify everything passes.
+4. **Commit** the version bump with message `v{VERSION}`.
+5. **Tag** the commit: `git tag v{VERSION}`. The tag name must match `mix.exs` exactly (prefixed with `v`).
+6. **Push**: `git push origin main --tags`.
+
+### Version History
+
+| Version | Git Tag | Notes |
+|---------|---------|-------|
+| 0.2.1   | `v0.2.1` | Docs cleanup, bug fixes, recollect 0.5 bump |
+| 0.2.0   | `v0.2.0` | Multi-mode loop, strategies, subagents, protocols, model router |
+| 0.1.9   | `v0.1.9` | LLM gateway proxy, ACP streaming, codex profile |

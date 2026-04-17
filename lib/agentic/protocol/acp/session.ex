@@ -388,7 +388,7 @@ defmodule Agentic.Protocol.ACP.Session do
       _ -> false
     end)
     |> Enum.map(fn %{"update" => update} ->
-      Types.tool_call_to_agentex(update)
+      Types.tool_call_to_agentic(update)
     end)
   end
 end

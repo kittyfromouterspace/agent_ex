@@ -16,9 +16,12 @@
 - [x] ACP profile in `Agentic.Loop.Profile`
 - [x] Application startup registration with config-driven agents
 
-### Phase 2: Discovery & Agent Quirks -- IN PROGRESS
+### Phase 2: Discovery & Agent Quirks -- COMPLETE
 - [x] `Agentic.Protocol.ACP.Discovery` -- 15-agent known DB + config + env var
 - [x] `Agentic.Protocol.ACP.Quirks` -- agent-specific workarounds (from acpx)
+
+### Phase 3: Client Capabilities & Permission Handling -- IN PROGRESS
+- [x] `Agentic.Protocol.ACP.Permission` -- bridge ACP permissions to Agentic
 - [ ] ACP-specific telemetry events
 - [ ] Integration test with mock subprocess
 
@@ -35,8 +38,8 @@
 lib/agentic/protocol.ex                          -- added :acp transport
 lib/agentic/protocol/registry.ex                  -- tuple key support
 lib/agentic/protocol/acp.ex                       -- NEW: main ACP protocol
-lib/agentic/protocol/acp/types.ex                  -- NEW: type definitions
-lib/agentic/protocol/acp/client.ex                 -- NEW: JSON-RPC client
+lib/agentic/protocol/acp/types.ex                 -- NEW: type definitions
+lib/agentic/protocol/acp/client.ex                -- NEW: JSON-RPC client
 lib/agentic/protocol/acp/session.ex               -- NEW: session lifecycle
 lib/agentic/protocol/acp/permission.ex            -- NEW: permission bridge
 lib/agentic/protocol/acp/discovery.ex             -- NEW: agent discovery
@@ -230,13 +233,12 @@ lib/agentic/
   protocol/
     acp.ex                    # Generic ACP protocol (implements AgentProtocol)
     acp/
-      client.ex               # JSON-RPC 2.0 client over stdio
+      client.ex               # JSON-RPC 2.0 client over stdio (includes listener loop)
       discovery.ex            # Auto-discovery of ACP-capable CLIs
       session.ex              # Session lifecycle management
       types.ex                # ACP type definitions (ContentBlock, etc.)
       permission.ex           # Permission request handling
-      manifest.ex             # Agent capability manifest from initialize
-      cache.ex                # ETS cache for discovery results
+      quirks.ex               # Agent-specific quirks and workarounds
 ```
 
 ### 4.4 Core Modules
@@ -376,8 +378,8 @@ Shared type specs for ACP protocol types:
 - `PermissionOption`, `RequestPermissionOutcome`
 
 Also provides conversion functions:
-- `to_agentex_messages/1` -- ACP ContentBlock[] -> Agentic message format
-- `from_agentex_messages/1` -- Agentic messages -> ACP ContentBlock[]
+- `to_agentic_messages/1` -- ACP ContentBlock[] -> Agentic message format
+- `from_agentic_messages/1` -- Agentic messages -> ACP ContentBlock[]
 - `tool_calls_to_pending/1` -- ACP tool_call updates -> Agentic pending_tool_calls
 
 ### 4.5 Bidirectional Communication Architecture
@@ -405,18 +407,7 @@ Agentic (Client)                    ACP Agent (subprocess)
        |<-- session/prompt response ---------|  response to original request
 ```
 
-Implementation: A dedicated listener process receives all messages from the agent's stdout. It routes responses to waiting request callers via a `Registry`, and delivers notifications to a configured handler callback.
-
-```elixir
-defmodule Agentic.Protocol.ACP.ClientListener do
-  use GenServer
-
-  # Receives all stdout from the ACP agent process
-  # Routes responses (has "id") to callers via Registry
-  # Delivers notifications (no "id") to notification handler
-  # Handles bidirectional requests (agent calling client methods)
-end
-```
+Implementation: The listener loop runs inside `Agentic.Protocol.ACP.Client`. It receives all messages from the agent's stdout, routes responses to waiting request callers via a `Registry`, and delivers notifications to a configured handler callback.
 
 ### 4.6 Client Capabilities
 
@@ -449,23 +440,21 @@ These can delegate to existing Agentic tool infrastructure via callbacks.
 
 ### 4.7 Profile Integration
 
-No new profiles needed. Instead, any existing profile can use an ACP agent by setting the protocol:
+The `:acp` profile and `{:acp, agent_name}` tuple profiles use `ACPExecutor` instead of `CLIExecutor`:
 
 ```elixir
-# Use Kimi via ACP with the agentic profile
+# Use Kimi via ACP with the acp profile
 Agentic.run(prompt, workspace: "/path",
-  profile: :agentic,
-  protocol: {:acp, :kimi}
+  profile: {:acp, :kimi}
 )
 
 # Use Claude Agent via ACP
 Agentic.run(prompt, workspace: "/path",
-  profile: :agentic,
-  protocol: {:acp, :claude}
+  profile: {:acp, :claude}
 )
 ```
 
-The `CLIExecutor` stage already handles `transport_type: :local_agent`. We extend it to also handle `:acp`, or create an `ACPExecutor` stage that mirrors CLIExecutor but uses the ACP client.
+The ACP profile pipeline is: `ContextGuard → ProgressInjector → ACPExecutor → ModeRouter → TranscriptRecorder → CommitmentGate`.
 
 ### 4.8 Configuration
 
@@ -508,24 +497,11 @@ The registry needs a small change: allow tuple keys. Currently it uses `is_atom(
 
 ### 4.10 Discovery-to-Profile Bridge
 
-For convenience, auto-discovered agents get synthetic profiles:
-
-```elixir
-# After discovering kimi, auto-create:
-Agentic.Loop.Profile.put(:kimi_acp, %{
-  stages: Agentic.Loop.Profile.stages(:claude_code),  # reuse CLI pipeline
-  config: %{
-    max_turns: 50,
-    protocol: {:acp, :kimi},
-    transport_type: :acp,
-    cli_config: %{command: "kimi", args: ["acp"]}
-  }
-})
-```
+Discovered agents are registered in `Protocol.Registry` as `{:acp, agent_name}`. The `stages({:acp, _agent})` function in `Profile` handles any ACP agent with the standard ACP pipeline.
 
 This means users can do:
 ```elixir
-Agentic.run(prompt, workspace: "/path", profile: :kimi_acp)
+Agentic.run(prompt, workspace: "/path", profile: {:acp, :kimi})
 ```
 
 ## 5. Migration Path for Existing CLI Protocols
@@ -551,12 +527,10 @@ This eliminates ~800 lines of near-identical subprocess management code.
 - Add `:acp` transport type to `Agentic.Protocol`
 - Allow tuple keys in `Protocol.Registry`
 
-### Phase 2: Discovery & Auto-Registration
+### Phase 2: Discovery & Quirks
 - `Agentic.Protocol.ACP.Discovery` -- known agents DB + filesystem probing
-- `Agentic.Protocol.ACP.Cache` -- ETS cache for discovery
-- `Agentic.Protocol.ACP.Manifest` -- capability metadata from initialize
+- `Agentic.Protocol.ACP.Quirks` -- agent-specific workarounds
 - Auto-register discovered agents on startup
-- Synthetic profile generation for discovered agents
 
 ### Phase 3: Client Capabilities & Permission Handling
 - `Agentic.Protocol.ACP.Permission` -- bridge ACP permissions to Agentic

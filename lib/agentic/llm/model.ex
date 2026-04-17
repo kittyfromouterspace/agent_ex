@@ -2,10 +2,8 @@ defmodule Agentic.LLM.Model do
   @moduledoc """
   Shared struct describing a single LLM model.
 
-  Providers populate `default_models/0` with these. Phase 3 will add a
-  `Agentic.LLM.Catalog` GenServer that merges static, discovered, and
-  user-overridden model lists. For Phase 2 the struct exists but the
-  only consumer is `default_models/0` on each provider.
+  Providers populate `default_models/0` with these. The `Agentic.LLM.Catalog`
+  GenServer merges static, discovered, and user-overridden model lists.
 
   Fields:
 

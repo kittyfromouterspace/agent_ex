@@ -4,11 +4,12 @@ defmodule Agentic.MixProject do
   def project do
     [
       app: :agentic,
-      version: "0.2.0",
+      version: "0.2.1",
       elixir: "~> 1.19",
       description: "A composable AI agent runtime",
       package: [
-        files: ~w(lib priv config README.md LICENSE mix.exs .formatter.exs),
+        files:
+          ~w(lib priv config README.md LICENSE mix.exs .formatter.exs usage-rules.md usage-rules),
         licenses: ["BSD-3-Clause"],
         links: %{"GitHub" => "https://github.com/kittyfromouterspace/agentic"}
       ],
@@ -37,7 +38,7 @@ defmodule Agentic.MixProject do
       {:yaml_elixir, "~> 2.9"},
       {:req, "~> 0.5"},
       {:nimble_options, "~> 1.1"},
-      {:recollect, "~> 0.4"},
+      {:recollect, "~> 0.5"},
       {:ecto_sql, "~> 3.12", optional: true},
       {:postgrex, "~> 0.19", optional: true},
       {:ecto_libsql, "~> 0.9", optional: true},

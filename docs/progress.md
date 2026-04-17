@@ -2,12 +2,7 @@
 
 > Tracks multi-mode loop implementation. See [decisions.md](./decisions.md) for design decisions log.
 
-## Status: V2.1 COMPLETE (266 tests, 0 failures)
-
-- [ ] Not started
-- [~] In progress
-- [x] Complete
-- [-] Skipped / deferred
+## Status: V2.1 COMPLETE
 
 ---
 
@@ -42,21 +37,21 @@
 ## V1.1 — COMPLETE
 
 ### Deferred V1.0 Tests
-- [x] PlanBuilder unit tests (7 tests)
-- [x] PlanTracker unit tests (14 tests)
-- [x] HumanCheckpoint unit tests (11 tests)
-- [x] VerifyPhase unit tests (7 tests)
-- [x] WorkspaceSnapshot unit tests (7 tests)
-- [x] Persistence backend tests (24 tests)
-- [x] agentic_planned integration test (8 tests)
-- [x] turn_by_turn integration test (12 tests)
+- [x] PlanBuilder unit tests
+- [x] PlanTracker unit tests
+- [x] HumanCheckpoint unit tests
+- [x] VerifyPhase unit tests
+- [x] WorkspaceSnapshot unit tests
+- [x] Persistence backend tests
+- [x] agentic_planned integration test
+- [x] turn_by_turn integration test
 
 ### V1.1 Enhancements
 - [x] Per-tool output clipping in ToolExecutor (`read_file` → 50KB, `bash` → 1MB, `list_files` → 10KB)
 - [x] File-read deduplication tracking in ToolExecutor (`ctx.file_reads`)
-- [x] ContinuationDetector port from Homunculus (20 tests)
-- [x] ContextCompression two-tier truncate/summarize port from Homunculus (8 tests)
-- [x] LLMSemaphore bounded concurrency port from SCE (7 tests)
+- [x] ContinuationDetector port from Homunculus
+- [x] ContextCompression two-tier truncate/summarize port from Homunculus
+- [x] LLMSemaphore bounded concurrency port from SCE
 - [-] Recollect Knowledge backend (deferred — requires Recollect DB)
 
 ---
@@ -67,7 +62,6 @@
 - [x] `cache_control` param with `stable_hash` and `prefix_changed` sent to `llm_chat`
 - [x] `stable_prefix_hash` context field (tracks when prefix changes)
 - [x] Hash computed from system prompt + tool definitions
-- [x] Cache awareness tests (6 tests)
 
 ---
 
@@ -78,9 +72,6 @@
 - [x] No-op when no `transcript_backend` callback configured
 - [x] Added to all 4 profiles (after ModeRouter)
 - [x] `Agentic.resume/1` with transcript reconstruction
-- [x] Rebuilds messages, turns_used, cost, tokens, plan from JSONL events
-- [x] TranscriptRecorder tests (5 tests)
-- [x] Resume tests (3 tests)
 
 ---
 
@@ -94,25 +85,32 @@
 - [x] Max concurrent subagents: 5 per workspace
 - [x] Max subagent nesting depth: 3
 - [x] Default max_turns per subagent: 20 (configurable, max 50)
-- [x] Application starts Subagent Registry + CoordinatorSupervisor
-- [x] Coordinator tests (3 tests)
-- [x] DelegateTask tests (5 tests)
 
 ---
 
 ## V2.1 — COMPLETE
 
 - [x] `tool_permissions` context field (`%{tool_name => :auto | :approve | :deny}`)
-- [x] `:on_tool_approval` callback (`(name, input, ctx) -> :approved | :denied | {:approved_with_changes, new_input}`)
+- [x] `:on_tool_approval` callback
 - [x] Permission check in ToolExecutor before circuit breaker
 - [x] Wired `tool_permissions` option in `Agentic.run/1`
-- [x] Tool permission tests (8 tests)
+
+---
+
+## V2.2 — COMPLETE
+
+- [x] CLI agent protocols (Claude Code, OpenCode, Codex)
+- [x] ACP (Agent Client Protocol) support
+- [x] Protocol Registry with auto-detection
+- [x] Tool activation system (budget-limited promotion)
+- [x] Model router with manual and auto selection modes
+- [x] Strategy layer with Default and Experiment strategies
+- [x] `AgentProtocol` behaviour for custom backends
 
 ---
 
 ## Future
 
 - Recollect Knowledge backend (deferred — requires Recollect DB)
-- Async subagent execution (V3.0)
+- Async subagent execution
 - Mode switching mid-run
-- Per-tool approval gating with runtime approval flow for `:turn_by_turn`

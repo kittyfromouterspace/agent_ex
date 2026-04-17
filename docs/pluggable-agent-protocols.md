@@ -377,7 +377,7 @@ defmodule Agentic.Protocol.ClaudeCode do
 
   @impl true
   def available? do
-    System.findExecutable(@cli_name) != nil
+    System.find_executable(@cli_name) != nil
   end
 
   @impl true

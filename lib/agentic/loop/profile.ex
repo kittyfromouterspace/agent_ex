@@ -5,20 +5,23 @@ defmodule Agentic.Loop.Profile do
   Each profile is a set of stages that compose to form a specific agent behavior.
   Adding a new agent "mode" is just defining a new profile.
 
-  ## Profiles
+  ## LLM Profiles
 
   - `:agentic` -- Full pipeline with tool use, progress tracking, context management
   - `:agentic_planned` -- Two-phase: plan then execute with tracking and verification
   - `:turn_by_turn` -- LLM proposes chunks, human approves/edits before execution
   - `:conversational` -- Simple call-respond loop, no tool execution
 
-  ## Protocol Support
+  ## CLI / Local Agent Profiles
 
-  Each profile can declare a protocol to use for agent communication:
+  - `:claude_code` -- Claude Code CLI via local agent protocol
+  - `:opencode` -- OpenCode CLI via local agent protocol
+  - `:codex` -- Codex CLI via local agent protocol
 
-  - `:llm` (default) -- Uses LLM API calls via `llm_chat` callback
-  - `:claude_code` -- Uses Claude Code CLI via local agent protocol
-  - `:opencode` -- Uses OpenCode CLI via local agent protocol
+  ## ACP Profiles
+
+  - `:acp` -- Agent Client Protocol (JSON-RPC 2.0 over stdio)
+  - `{:acp, agent_name}` -- ACP with a specific named agent
   """
 
   alias Agentic.Loop.Stages

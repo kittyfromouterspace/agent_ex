@@ -1,9 +1,15 @@
 defmodule Agentic.Memory.FactExtractor do
   @moduledoc """
-  Pure, deterministic fact extraction from tool results and LLM responses.
+  Fact extraction from tool results and LLM responses.
 
-  Uses regex-based pattern matching to extract structured facts — NO LLM calls,
-  NO GenServer. Must be fast enough to run synchronously after every tool call.
+  The core extraction functions (`extract_from_tool_result/3`,
+  `extract_from_response/2`) use pure regex-based pattern matching —
+  NO LLM calls, NO GenServer. These are designed to run synchronously
+  after every tool call.
+
+  An optional LLM-assisted path (`extract_with_llm/4`) provides deeper
+  extraction for complex turns, gated by `qualifies_for_llm_extraction?/3`
+  heuristics to limit cost.
 
   Each fact is a map with:
   - `entity` — the subject (file path, tool name, concept)
@@ -250,7 +256,7 @@ defmodule Agentic.Memory.FactExtractor do
   defp has_decision_language?(_), do: false
 
   @doc """
-  Extract facts using an LLM call. Async, non-blocking.
+  Extract facts using an LLM call. Synchronous — wraps `llm_chat` directly.
 
   Accepts an optional `llm_chat` function as the 4th argument. If nil, returns `[]`.
   The function should accept a params map and return `{:ok, response}` or `{:error, reason}`.

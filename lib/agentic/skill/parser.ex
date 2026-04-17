@@ -14,7 +14,7 @@ defmodule Agentic.Skill.Parser do
 
   Required frontmatter fields: `name`, `description`.
   Optional: `license`, `metadata` (map), `compatibility`, `type`, `core`,
-  `loading`, `version`, `parameters`, `model_tier`.
+  `loading`, `version`, `parameters`, `model_tier`, `source`.
 
   ## Skill Types
 
@@ -48,7 +48,8 @@ defmodule Agentic.Skill.Parser do
           loading: String.t(),
           version: String.t() | nil,
           parameters: [parameter()],
-          model_tier: model_tier()
+          model_tier: model_tier(),
+          source: String.t() | nil
         }
 
   @type parsed_skill :: %{

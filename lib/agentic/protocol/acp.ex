@@ -185,7 +185,7 @@ defmodule Agentic.Protocol.ACP do
                   {:message, %{"content" => text}}
 
                 "tool_call" ->
-                  {:message, %{"tool_calls" => [Types.tool_call_to_agentex(update)]}}
+                  {:message, %{"tool_calls" => [Types.tool_call_to_agentic(update)]}}
 
                 _ ->
                   :partial

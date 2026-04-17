@@ -8,10 +8,14 @@ defmodule Agentic.Workspace.Service do
     ├── TOOLS.md               # Available tools & credentials
     ├── MEMORY.md              # Curated long-term memory
     ├── HEARTBEAT.md           # Periodic task config
+    ├── CAPABILITIES.md        # Skill registry
+    ├── skills/                # Installed skills
     ├── memory/
     │   └── YYYY-MM-DD.md      # Daily logs
-    └── policy/
-        └── policy.yaml        # Tool permissions
+    ├── policy/
+    │   └── policy.yaml        # Tool permissions
+    ├── scratch/               # Scratch space (task workspaces)
+    └── TASK.md                # Task brief (task workspaces)
 
   Identity files (SOUL.md, IDENTITY.md, USER.md) are created by the agent
   during the onboarding conversation, not scaffolded here.

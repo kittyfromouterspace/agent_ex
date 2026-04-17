@@ -169,8 +169,8 @@ defmodule Agentic.Protocol.ACP.Types do
   @doc """
   Converts an ACP tool_call_update to Agentic pending_tool_call format.
   """
-  @spec tool_call_to_agentex(tool_call_update()) :: map()
-  def tool_call_to_agentex(%{
+  @spec tool_call_to_agentic(tool_call_update()) :: map()
+  def tool_call_to_agentic(%{
         "toolCallId" => id,
         "status" => "completed",
         "rawInput" => raw_input
@@ -187,7 +187,7 @@ defmodule Agentic.Protocol.ACP.Types do
     }
   end
 
-  def tool_call_to_agentex(%{
+  def tool_call_to_agentic(%{
         "toolCallId" => id,
         "rawInput" => raw_input,
         "title" => title
@@ -205,7 +205,7 @@ defmodule Agentic.Protocol.ACP.Types do
     }
   end
 
-  def tool_call_to_agentex(%{"toolCallId" => id}) do
+  def tool_call_to_agentic(%{"toolCallId" => id}) do
     %{
       "id" => id,
       "type" => "function",

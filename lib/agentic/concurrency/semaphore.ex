@@ -37,7 +37,7 @@ defmodule Agentic.Concurrency.Semaphore do
     GenServer.start_link(__MODULE__, limit, Keyword.take(opts, [:name]))
   end
 
-  @doc "Acquire a permit. Blocks if none available. Returns `:ok`."
+  @doc "Acquire a permit. Blocks if none available. Returns `:ok`. Times out after 5 seconds by default."
   def acquire(sem, timeout \\ 5000) do
     GenServer.call(sem, {:acquire, self()}, timeout)
   end

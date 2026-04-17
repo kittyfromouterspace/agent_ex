@@ -48,9 +48,9 @@ defmodule Agentic.LLM.Transport do
                           for provider-specific headers (e.g.
                           `HTTP-Referer`, `anthropic-version`)
 
-  Phase 2 will move credential lookup behind a Provider behaviour and
-  the shim/`opts[:api_key]` plumbing will go away. For Phase 1 the
-  shim still hands the api key in directly.
+  Credential lookup is handled by `Agentic.LLM.Credentials` and
+  `Agentic.LLM.Provider`. The `:api_key` opt is resolved before
+  the transport is called.
   """
 
   alias Agentic.LLM.{Error, RateLimit, Response}

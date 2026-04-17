@@ -22,11 +22,10 @@ defmodule Agentic.Protocol.LLM do
 
   @impl true
   def send(_session_id, messages, %Context{} = ctx) do
-    # Delegate to the llm_chat callback
     llm_chat = ctx.callbacks[:llm_chat]
 
     if llm_chat do
-      llm_chat.(messages)
+      llm_chat.(%{"messages" => messages})
     else
       {:error, :no_llm_chat_callback}
     end
