@@ -40,11 +40,14 @@ defmodule AgentEx.Protocol.OpenCode do
 
   @impl true
   def build_config(profile_config) do
+    base_env = profile_config[:env] || %{}
+    env_with_gateway = AgentEx.LLM.Gateway.inject_env(base_env, :openai)
+
     Map.merge(
       %{
         command: @cli_name,
         args: default_args() ++ (profile_config[:extra_args] || []),
-        env: profile_config[:env] || %{},
+        env: env_with_gateway,
         session_mode: :always,
         session_id_fields: ["session_id"],
         system_prompt_mode: :append,
@@ -129,16 +132,20 @@ defmodule AgentEx.Protocol.OpenCode do
 
     {exe, args, extra_env} =
       Runner.wrap_executable(
-        :os.find_executable(config[:command]) || config[:command],
+        :os.find_executable(to_charlist(config[:command])) || config[:command],
         config[:args] || [],
         workspace: workspace,
         agent_dirs: agent_dirs
       )
 
+    env =
+      merge_env(config, config[:env] || %{})
+      |> Enum.map(fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
+
     port =
       Port.open(
         {:spawn_executable, exe},
-        [:stream, :binary, :exit_status, {:args, args} | extra_env]
+        [:stream, :binary, :exit_status, {:args, args}, {:env, env} | extra_env]
       )
 
     session_id =

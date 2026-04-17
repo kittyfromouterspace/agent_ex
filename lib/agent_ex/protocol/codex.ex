@@ -38,11 +38,14 @@ defmodule AgentEx.Protocol.Codex do
 
   @impl true
   def build_config(profile_config) do
+    base_env = profile_config[:env] || %{}
+    env_with_gateway = AgentEx.LLM.Gateway.inject_env(base_env, :openai)
+
     Map.merge(
       %{
         command: @cli_name,
         args: default_args() ++ (profile_config[:extra_args] || []),
-        env: profile_config[:env] || %{},
+        env: env_with_gateway,
         session_mode: :always,
         session_id_fields: ["session_id"],
         system_prompt_mode: :append,
@@ -123,10 +126,14 @@ defmodule AgentEx.Protocol.Codex do
   def start(backend_config, _ctx) do
     config = build_config(backend_config)
 
+    env =
+      merge_env(config, config[:env] || %{})
+      |> Enum.map(fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
+
     port =
       Port.open(
-        {:spawn_executable, :os.find_executable(config[:command]) || config[:command]},
-        [:stream, :binary, :exit_status, {:args, config[:args] || []}]
+        {:spawn_executable, :os.find_executable(to_charlist(config[:command])) || config[:command]},
+        [:stream, :binary, :exit_status, {:args, config[:args] || []}, {:env, env}]
       )
 
     session_id = generate_session_id()

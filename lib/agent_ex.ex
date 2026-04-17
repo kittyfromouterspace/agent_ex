@@ -203,12 +203,14 @@ defmodule AgentEx do
       end
 
     allowed_roots = Keyword.get(opts, :allowed_roots, [workspace])
+    backend_config = Keyword.get(opts, :backend_config, %{}) |> Map.put_new(:workspace, workspace)
 
     ctx =
       Context.new(
         session_id: session_id,
         user_id: user_id,
         caller: caller,
+        profile: profile_name,
         metadata: %{workspace: workspace, workspace_id: workspace_id, allowed_roots: allowed_roots},
         messages: messages,
         core_tools: core_tools,
@@ -219,7 +221,8 @@ defmodule AgentEx do
         model_filter: model_filter,
         strategy: strategy,
         config: config,
-        callbacks: callbacks
+        callbacks: callbacks,
+        backend_config: backend_config
       )
 
     ctx = %{ctx | mode: mode, phase: effective_phase, tool_permissions: tool_permissions}
@@ -347,6 +350,7 @@ defmodule AgentEx do
             session_id: session_id,
             user_id: user_id,
             caller: caller,
+            profile: profile_name,
             metadata: %{workspace: workspace, workspace_id: workspace_id},
             messages: messages,
             core_tools: core_tools,

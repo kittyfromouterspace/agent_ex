@@ -82,6 +82,18 @@ defmodule AgentEx.Protocol.ACP.Client do
     :exit, _ -> nil
   end
 
+  @doc "Reset the prompt accumulator and updates list."
+  @spec reset_prompt_state(client()) :: :ok
+  def reset_prompt_state(client) do
+    GenServer.call(client, :reset_prompt_state, 5_000)
+  end
+
+  @doc "Get the current prompt accumulator text and updates list."
+  @spec get_prompt_state(client()) :: {String.t(), [map()]}
+  def get_prompt_state(client) do
+    GenServer.call(client, :get_prompt_state, 5_000)
+  end
+
   # --- Server Implementation ---
 
   @impl true
@@ -92,7 +104,7 @@ defmodule AgentEx.Protocol.ACP.Client do
     notification_handler = Keyword.get(opts, :notification_handler)
     request_handler = Keyword.get(opts, :request_handler)
 
-    executable = :os.find_executable(command) || command
+    executable = :os.find_executable(to_charlist(command)) || command
 
     port =
       Port.open(
@@ -107,10 +119,10 @@ defmodule AgentEx.Protocol.ACP.Client do
       next_id: 1,
       pending: %{},
       notification_handler: notification_handler,
-      request_handler: request_handler
+      request_handler: request_handler,
+      prompt_accumulator: "",
+      updates: []
     }
-
-    send(self(), :start_listening)
 
     {:ok, state}
   end
@@ -142,6 +154,16 @@ defmodule AgentEx.Protocol.ACP.Client do
   end
 
   @impl true
+  def handle_call(:get_prompt_state, _from, state) do
+    {:reply, {state.prompt_accumulator, state.updates}, state}
+  end
+
+  @impl true
+  def handle_call(:reset_prompt_state, _from, state) do
+    {:reply, :ok, %{state | prompt_accumulator: "", updates: []}}
+  end
+
+  @impl true
   def handle_cast({:notify, method, params}, state) do
     msg =
       AgentEx.Protocol.ACP.Types.build_notification(method, params)
@@ -156,12 +178,6 @@ defmodule AgentEx.Protocol.ACP.Client do
   def handle_cast(:stop, state) do
     close_port(state.port)
     {:stop, :normal, state}
-  end
-
-  @impl true
-  def handle_info(:start_listening, state) do
-    listen_loop(state)
-    {:noreply, state}
   end
 
   @impl true
@@ -258,6 +274,50 @@ defmodule AgentEx.Protocol.ACP.Client do
       end
     end
 
+    # Accumulate prompt updates in client state
+    state = accumulate_update(msg, state)
+
+    state
+  end
+
+  defp accumulate_update(%{"method" => "session/update", "params" => params} = msg, state) do
+    update = params["update"] || %{}
+    type = update["sessionUpdate"] || ""
+
+    prompt_accumulator =
+      case type do
+        "agent_message_chunk" ->
+          text = get_in(update, ["content", "text"]) || ""
+
+          # ACP agents may send either incremental chunks or the full message
+          # so far. Handle both by checking if the new text is a superset of
+          # the accumulated text.
+          new_acc =
+            cond do
+              text == state.prompt_accumulator ->
+                state.prompt_accumulator
+
+              String.starts_with?(text, state.prompt_accumulator) ->
+                text
+
+              true ->
+                state.prompt_accumulator <> text
+            end
+
+          Logger.debug(
+            "ACP chunk: prev_len=#{String.length(state.prompt_accumulator)}, new_len=#{String.length(new_acc)}, text_len=#{String.length(text)}"
+          )
+
+          new_acc
+
+        _ ->
+          state.prompt_accumulator
+      end
+
+    %{state | prompt_accumulator: prompt_accumulator, updates: state.updates ++ [msg]}
+  end
+
+  defp accumulate_update(_msg, state) do
     state
   end
 
@@ -317,31 +377,6 @@ defmodule AgentEx.Protocol.ACP.Client do
 
       _ ->
         {Enum.reverse(acc), buffer}
-    end
-  end
-
-  defp listen_loop(state) do
-    receive do
-      {port, {:data, chunk}} when port == state.port ->
-        new_buffer = state.buffer <> chunk
-        {messages, remaining} = extract_messages(new_buffer)
-
-        state = Enum.reduce(messages, %{state | buffer: ""}, &dispatch_message/2)
-
-        listen_loop(%{state | buffer: remaining})
-
-      {port, {:exit_status, status}} when port == state.port ->
-        Logger.info("ACP client (#{state.command}) exited with status #{status}")
-
-        for {_id, %{from: from}} <- state.pending do
-          GenServer.reply(from, {:error, {:exit_status, status}})
-        end
-
-      _ ->
-        :ok
-    after
-      60_000 ->
-        :ok
     end
   end
 

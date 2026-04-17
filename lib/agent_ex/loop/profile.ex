@@ -92,6 +92,10 @@ defmodule AgentEx.Loop.Profile do
     stages(:claude_code)
   end
 
+  def stages(:codex) do
+    stages(:claude_code)
+  end
+
   def stages({:acp, _agent}) do
     [
       Stages.ContextGuard,

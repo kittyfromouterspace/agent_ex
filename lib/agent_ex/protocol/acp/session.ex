@@ -137,27 +137,40 @@ defmodule AgentEx.Protocol.ACP.Session do
       "prompt" => content_blocks
     }
 
-    session = %{session | updates: [], prompt_accumulator: ""}
+    # Reset client-side accumulator before each prompt
+    :ok = AgentEx.Protocol.ACP.Client.reset_prompt_state(session.client)
 
     case AgentEx.Protocol.ACP.Client.request(session.client, "session/prompt", params,
            timeout: timeout
          ) do
-      {:ok, %{"stopReason" => stop_reason}} ->
-        response = %{
-          content: session.prompt_accumulator,
-          tool_calls: extract_tool_calls(session.updates),
-          stop_reason: Types.parse_stop_reason(stop_reason),
-          updates: session.updates
-        }
-
-        {:ok, response, session}
-
       {:ok, result} ->
+        {accumulated_text, updates} =
+          AgentEx.Protocol.ACP.Client.get_prompt_state(session.client)
+
+        # Some ACP agents return content directly in the response; prefer that
+        # but fall back to accumulated streaming text. Content may be a string or
+        # a list of content blocks.
+        content =
+          case result["content"] do
+            nil -> accumulated_text
+            text when is_binary(text) -> text
+            [%{"type" => "text", "text" => text} | _] -> text
+            blocks when is_list(blocks) -> Enum.map_join(blocks, "", &Types.content_block_to_text/1)
+            other -> to_string(other)
+          end
+
+        Logger.debug(
+          "ACP prompt result: content_length=#{String.length(content)}, accumulated_length=#{String.length(accumulated_text)}, result=#{inspect(result, limit: 200)}"
+        )
+
+        stop_reason =
+          if is_map(result), do: result["stopReason"] || "end_turn", else: "end_turn"
+
         response = %{
-          content: session.prompt_accumulator,
-          tool_calls: extract_tool_calls(session.updates),
-          stop_reason: :end_turn,
-          updates: session.updates,
+          content: content,
+          tool_calls: extract_tool_calls(updates),
+          stop_reason: Types.parse_stop_reason(stop_reason),
+          updates: updates,
           raw_result: result
         }
 
@@ -310,24 +323,17 @@ defmodule AgentEx.Protocol.ACP.Session do
   defp maybe_authenticate(session, [_method | _rest] = methods) do
     Logger.info("ACP agent requires authentication, methods: #{inspect(methods)}")
 
-    case session.permission_policy do
-      :allow_all ->
-        if auth_method = List.first(methods) do
-          params = %{"methodId" => auth_method["id"]}
+    if auth_method = List.first(methods) do
+      params = %{"methodId" => auth_method["id"]}
 
-          case AgentEx.Protocol.ACP.Client.request(session.client, "authenticate", params,
-                 timeout: 10_000
-               ) do
-            {:ok, _} -> :ok
-            {:error, reason} -> {:error, {:authenticate_failed, reason}}
-          end
-        else
-          :ok
-        end
-
-      _ ->
-        Logger.warning("ACP agent requires authentication but no credentials available")
-        {:error, :auth_required}
+      case AgentEx.Protocol.ACP.Client.request(session.client, "authenticate", params,
+             timeout: 10_000
+           ) do
+        {:ok, _} -> :ok
+        {:error, reason} -> {:error, {:authenticate_failed, reason}}
+      end
+    else
+      :ok
     end
   end
 

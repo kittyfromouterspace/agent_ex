@@ -130,7 +130,6 @@ defmodule AgentEx.Loop.Stages.ACPExecutor do
       ctx
       | last_response: response_map,
         pending_tool_calls: tool_calls,
-        accumulated_text: ctx.accumulated_text <> content,
         total_cost: ctx.total_cost + cost
     }
   end

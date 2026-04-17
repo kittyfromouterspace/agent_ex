@@ -71,6 +71,15 @@ defmodule AgentEx.Config do
     get_in_env(:telemetry, key, default)
   end
 
+  @doc """
+  Returns the preferred embedding model id, or nil if not configured.
+  Hosts can set `config :agent_ex, embedding_model: "text-embedding-3-small"`.
+  """
+  @spec embedding_model() :: String.t() | nil
+  def embedding_model do
+    get_env(:embedding_model, nil)
+  end
+
   @doc "Validate and return the full config map."
   @spec validate!() :: keyword()
   def validate! do
@@ -87,7 +96,8 @@ defmodule AgentEx.Config do
   end
 
   defp get_in_env(top, key, default) do
-    get_env(top, [])
+    top
+    |> get_env([])
     |> Keyword.get(key, default)
   end
 end

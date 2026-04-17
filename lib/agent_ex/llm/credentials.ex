@@ -49,6 +49,30 @@ defmodule AgentEx.LLM.Credentials do
   end
 
   @doc """
+  Remove a single credential from the runtime ETS store.
+  """
+  @spec delete(String.t()) :: :ok
+  def delete(env_var) when is_binary(env_var) do
+    if :ets.whereis(@table) != :undefined do
+      :ets.delete(@table, env_var)
+    end
+
+    :ok
+  end
+
+  @doc """
+  Remove all credentials from the runtime ETS store.
+  """
+  @spec clear() :: :ok
+  def clear do
+    if :ets.whereis(@table) != :undefined do
+      :ets.delete_all_objects(@table)
+    end
+
+    :ok
+  end
+
+  @doc """
   Resolve credentials for a provider module.
 
   When `opts[:api_key]` is provided, uses that directly instead of
@@ -152,23 +176,10 @@ defmodule AgentEx.LLM.Credentials do
   defp find_first_env([]), do: :none
 
   defp find_first_env([var | rest]) when is_binary(var) do
-    case lookup_store(var) || System.get_env(var) do
+    case System.get_env(var) do
       nil -> find_first_env(rest)
       "" -> find_first_env(rest)
       key -> {:ok, {var, key}}
-    end
-  end
-
-  defp lookup_store(var) do
-    case :ets.whereis(@table) do
-      :undefined ->
-        nil
-
-      _ref ->
-        case :ets.lookup(@table, var) do
-          [{^var, key}] -> key
-          _ -> nil
-        end
     end
   end
 end

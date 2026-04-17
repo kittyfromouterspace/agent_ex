@@ -14,6 +14,9 @@ defmodule AgentEx.Loop.Context do
     user_id: nil,
     caller: nil,
 
+    # Profile used to select stages and configuration
+    profile: :agentic,
+
     # Arbitrary metadata (workspace_id, workspace path, etc.)
     metadata: %{},
 
@@ -117,6 +120,7 @@ defmodule AgentEx.Loop.Context do
           session_id: String.t() | nil,
           user_id: String.t() | nil,
           caller: pid() | nil,
+          profile: atom(),
           metadata: map(),
           resolved_model: map() | nil,
           messages: list(map()),
@@ -181,7 +185,9 @@ defmodule AgentEx.Loop.Context do
       model_filter: Keyword.get(opts, :model_filter),
       strategy: Keyword.get(opts, :strategy, :default),
       config: Keyword.get(opts, :config, %__MODULE__{}.config),
-      callbacks: Keyword.get(opts, :callbacks, %{})
+      callbacks: Keyword.get(opts, :callbacks, %{}),
+      backend_config: Keyword.get(opts, :backend_config, %{}),
+      profile: Keyword.get(opts, :profile, :agentic)
     }
   end
 

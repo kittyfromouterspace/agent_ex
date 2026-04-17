@@ -20,7 +20,14 @@ defmodule AgentEx.LLM do
       {:ok, [vector, ...], "text-embedding-3-small"} | {:error, %Error{}}
   """
 
-  alias AgentEx.LLM.{Catalog, Credentials, Error, Provider, ProviderRegistry}
+  alias AgentEx.LLM.Catalog
+  alias AgentEx.LLM.Credentials
+  alias AgentEx.LLM.Error
+  alias AgentEx.LLM.Provider
+  alias AgentEx.LLM.ProviderRegistry
+  alias AgentEx.ModelRouter
+
+  require Logger
 
   @type embed_result :: {:ok, [[float()]], String.t()} | {:error, Error.t()}
 
@@ -36,29 +43,129 @@ defmodule AgentEx.LLM do
   end
 
   @doc """
-  Chat completion via tier resolution.
+  Chat completion via tier resolution with full failover.
 
-  Currently a thin wrapper that delegates to `chat/2` after picking
-  the first chat-capable provider for the requested tier. The Phase
-  5 retry walk in `AgentEx.Loop.Stages.LLMCall` does the more
-  sophisticated route walking; this entry point is for callers that
-  want a single dispatch.
+  Resolves every healthy route in `tier` from the ModelRouter and walks
+  them in priority order with error classification and health reporting.
+  Accepts an optional `llm_chat` callback (same shape as the loop callback)
+  for callers that want to customise dispatch (e.g. host app credential
+  injection). Falls back to direct provider dispatch when no callback is
+  provided. Returns `{:ok, %Response{}}` or `{:error, %Error{}}`.
+
+  ## Options
+
+    * `:llm_chat` — `(map() -> {:ok, response} | {:error, term()})` callback.
+      When provided, each route is injected as `params["_route"]` and the
+      callback is invoked. Otherwise direct `Provider.chat/3` is used.
   """
   def chat_tier(params, tier, opts \\ []) do
-    case Catalog.find(tier: tier, has: :chat) do
-      [%{provider: provider_id, id: model_id} | _] ->
-        provider = ProviderRegistry.get(provider_id)
+    llm_chat = Keyword.get(opts, :llm_chat)
 
-        chat(
-          params,
-          Keyword.merge(opts, provider: provider_id, model: model_id, _provider_module: provider)
-        )
+    case resolve_routes(tier) do
+      {:ok, [_ | _] = routes} ->
+        walk_routes(routes, params, tier, llm_chat, opts, nil)
 
-      [] ->
-        {:error,
-         %Error{message: "no provider available for tier #{tier}", classification: :permanent}}
+      _ ->
+        {:error, %Error{message: "no provider available for tier #{tier}", classification: :permanent}}
     end
   end
+
+  defp resolve_routes(tier) do
+    ModelRouter.resolve_all(tier)
+  catch
+    :exit, {:noproc, _} -> {:error, :router_unavailable}
+    :exit, _ -> {:error, :router_unavailable}
+  end
+
+  defp walk_routes([], _params, tier, _llm_chat, _opts, last_error) do
+    Logger.debug("AgentEx.LLM.chat_tier: all routes for tier #{tier} exhausted")
+
+    {:error,
+     last_error ||
+       %Error{message: "all routes exhausted for tier #{tier}", classification: :permanent}}
+  end
+
+  defp walk_routes([route | rest], params, tier, llm_chat, opts, _last) do
+    Logger.debug("AgentEx.LLM.chat_tier: trying #{route.provider_name}/#{route.model_id} (tier #{tier})")
+
+    result =
+      if llm_chat do
+        params_with_route = Map.put(params, "_route", route)
+        llm_chat.(params_with_route)
+      else
+        direct_dispatch(params, route, opts)
+      end
+
+    case result do
+      {:ok, _} = ok ->
+        ModelRouter.report_success(route.provider_name, route.model_id)
+        ok
+
+      {:error, _reason} = err ->
+        failure = classify_tier_error(err)
+        retry_ms = extract_retry_after(err)
+
+        Logger.warning(
+          "AgentEx.LLM.chat_tier: #{route.provider_name}/#{route.model_id} failed (#{failure}); trying next"
+        )
+
+        report_opts = if is_integer(retry_ms), do: [retry_after_ms: retry_ms], else: []
+        ModelRouter.report_error(route.provider_name, route.model_id, failure, report_opts)
+        walk_routes(rest, params, tier, llm_chat, opts, err)
+    end
+  end
+
+  defp direct_dispatch(params, route, opts) do
+    provider_name = route.provider_name
+    model_id = route.model_id
+
+    case ProviderRegistry.get(provider_name) do
+      nil ->
+        {:error,
+         %Error{
+           message: "unknown provider #{provider_name}",
+           classification: :permanent
+         }}
+
+      provider ->
+        Provider.chat(provider, params, Keyword.put(opts, :model, model_id))
+    end
+  end
+
+  defp classify_tier_error({:error, %{classification: c}}), do: legacy_failure(c)
+  defp classify_tier_error({:error, %{status: 429}}), do: :rate_limit
+  defp classify_tier_error({:error, %{status: s}}) when s in [401, 403], do: :auth_error
+  defp classify_tier_error({:error, %{status: s}}) when is_integer(s) and s >= 500, do: :other
+
+  defp classify_tier_error({:error, %{message: msg}}) when is_binary(msg), do: classify_tier_error({:error, msg})
+
+  defp classify_tier_error({:error, reason}) when is_binary(reason) do
+    cond do
+      String.contains?(reason, "429") or String.contains?(reason, "rate") -> :rate_limit
+      String.contains?(reason, "401") or String.contains?(reason, "403") -> :auth_error
+      String.contains?(reason, "timeout") or String.contains?(reason, "connection") -> :connection_error
+      true -> :other
+    end
+  end
+
+  defp classify_tier_error(_), do: :other
+
+  defp legacy_failure(:rate_limit), do: :rate_limit
+  defp legacy_failure(:overloaded), do: :rate_limit
+  defp legacy_failure(:auth), do: :auth_error
+  defp legacy_failure(:auth_permanent), do: :auth_error
+  defp legacy_failure(:billing), do: :auth_error
+  defp legacy_failure(:timeout), do: :connection_error
+  defp legacy_failure(:transient), do: :connection_error
+  defp legacy_failure(:permanent), do: :other
+  defp legacy_failure(:format), do: :other
+  defp legacy_failure(:model_not_found), do: :other
+  defp legacy_failure(:context_overflow), do: :other
+  defp legacy_failure(:session_expired), do: :auth_error
+  defp legacy_failure(_), do: :other
+
+  defp extract_retry_after({:error, %{retry_after_ms: ms}}) when is_integer(ms) and ms > 0, do: ms
+  defp extract_retry_after(_), do: nil
 
   @doc """
   Generate embeddings for one or more strings via an explicit provider.
@@ -75,8 +182,7 @@ defmodule AgentEx.LLM do
 
     case lookup_provider(provider_id) do
       nil ->
-        {:error,
-         %Error{message: "unknown provider #{inspect(provider_id)}", classification: :permanent}}
+        {:error, %Error{message: "unknown provider #{inspect(provider_id)}", classification: :permanent}}
 
       provider ->
         embed_via_provider(provider, model_id, text_or_list)
@@ -119,37 +225,34 @@ defmodule AgentEx.LLM do
     explicit_model = Keyword.get(opts, :model)
     explicit_provider = Keyword.get(opts, :provider)
 
-    cond do
-      explicit_model && explicit_provider ->
-        case lookup_provider(explicit_provider) do
-          nil -> :none
-          mod -> {:ok, mod, explicit_model}
+    if explicit_model && explicit_provider do
+      case lookup_provider(explicit_provider) do
+        nil -> :none
+        mod -> {:ok, mod, explicit_model}
+      end
+    else
+      candidates =
+        case Catalog.find(tier: tier, has: :embeddings) do
+          [] -> Catalog.find(has: :embeddings)
+          list -> list
         end
 
-      true ->
-        # Try tier-specific match first, then any embedding model.
-        candidates =
-          case Catalog.find(tier: tier, has: :embeddings) do
-            [] -> Catalog.find(has: :embeddings)
-            list -> list
-          end
+      preferred_id = explicit_model || AgentEx.Config.embedding_model()
 
-        candidates
-        |> Enum.sort_by(&embedding_preference/1)
-        |> Enum.find_value(:none, fn model ->
-          case lookup_provider(model.provider) do
-            nil -> false
-            mod -> {:ok, mod, model.id}
-          end
-        end)
+      candidates
+      |> Enum.sort_by(&embedding_preference(&1, preferred_id))
+      |> Enum.find_value(:none, fn model ->
+        case lookup_provider(model.provider) do
+          nil -> false
+          mod -> {:ok, mod, model.id}
+        end
+      end)
     end
   end
 
-  # Sort key: lower is better. Prefer text-embedding-3-small as the
-  # documented default, then any non-Ollama provider, then anything else.
-  defp embedding_preference(model) do
+  defp embedding_preference(model, preferred_id) do
     cond do
-      model.id == "text-embedding-3-small" -> 0
+      is_binary(preferred_id) and model.id == preferred_id -> 0
       model.provider != :ollama -> 1
       true -> 2
     end
@@ -185,8 +288,7 @@ defmodule AgentEx.LLM do
         :not_configured ->
           {:error,
            %Error{
-             message:
-               "#{provider.id()} not configured (set #{Enum.join(provider.env_vars(), " or ")})",
+             message: "#{provider.id()} not configured (set #{Enum.join(provider.env_vars(), " or ")})",
              classification: :auth
            }}
       end

@@ -26,14 +26,14 @@ defmodule AgentEx.LLM.ProviderRegistry do
 
   @doc "List all registered providers (enabled and disabled)."
   def list do
-    :ets.match_object(@table, {:_, :_, :_})
+    @table
+    |> :ets.match_object({:_, :_, :_})
     |> Enum.map(fn {id, module, status} -> %{id: id, module: module, status: status} end)
   end
 
   @doc "List only enabled providers."
   def enabled do
-    list()
-    |> Enum.filter(&(&1.status == :enabled))
+    Enum.filter(list(), &(&1.status == :enabled))
   end
 
   @doc "Check if a specific provider is enabled."
@@ -50,6 +50,17 @@ defmodule AgentEx.LLM.ProviderRegistry do
       [{_, module, status}] when status == :enabled -> module
       _ -> nil
     end
+  end
+
+  def get(provider_name) when is_binary(provider_name) do
+    atom = safe_to_atom(provider_name)
+    if atom, do: get(atom)
+  end
+
+  defp safe_to_atom(name) when is_binary(name) do
+    String.to_existing_atom(name)
+  rescue
+    ArgumentError -> nil
   end
 
   @doc "Enable a provider by id."
