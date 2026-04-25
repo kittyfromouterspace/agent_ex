@@ -44,9 +44,18 @@ defmodule Agentic.LLM.Provider do
   @callback classify_http_error(non_neg_integer() | nil, term(), term()) ::
               {atom(), non_neg_integer() | nil} | :default
 
+  @doc """
+  Optional hook for providers to inject provider-specific keys into the
+  outbound chat request body. Used for things like OpenRouter's
+  `provider` preference block, which is a request-body extension on top
+  of the OpenAI-compatible spec. Returns a map; an empty map is a no-op.
+  """
+  @callback request_body_extras(canonical :: map()) :: map()
+
   @optional_callbacks fetch_catalog: 1,
                       fetch_usage: 1,
-                      classify_http_error: 3
+                      classify_http_error: 3,
+                      request_body_extras: 1
 
   @doc """
   Call a provider's `chat` via its declared transport.
@@ -68,13 +77,14 @@ defmodule Agentic.LLM.Provider do
           Keyword.get(opts, :model) ||
             get_default_model(provider)
 
-        canonical = build_canonical(params, model)
+        canonical = build_canonical(params, model, opts)
 
         transport_opts =
           [
             base_url: base_url,
             api_key: creds.api_key,
-            extra_headers: creds.headers
+            extra_headers: creds.headers,
+            extra_body: provider_body_extras(provider, canonical)
           ]
 
         request = transport_mod.build_chat_request(canonical, transport_opts)
@@ -129,12 +139,13 @@ defmodule Agentic.LLM.Provider do
           Keyword.get(opts, :model) ||
             get_default_model(provider)
 
-        canonical = build_canonical(params, model)
+        canonical = build_canonical(params, model, opts)
 
         transport_opts = [
           base_url: base_url,
           api_key: creds.api_key,
-          extra_headers: creds.headers
+          extra_headers: creds.headers,
+          extra_body: provider_body_extras(provider, canonical)
         ]
 
         request = transport_mod.build_chat_request(canonical, transport_opts)
@@ -352,6 +363,14 @@ defmodule Agentic.LLM.Provider do
   defp translate_stream_finish(nil, _), do: :end_turn
   defp translate_stream_finish(_, _), do: :end_turn
 
+  defp provider_body_extras(provider, canonical) do
+    if function_exported?(provider, :request_body_extras, 1) do
+      provider.request_body_extras(canonical) || %{}
+    else
+      %{}
+    end
+  end
+
   defp get_default_model(provider) do
     provider.default_models()
     |> Enum.find(&(&1.tier_hint == :primary))
@@ -361,7 +380,7 @@ defmodule Agentic.LLM.Provider do
     end
   end
 
-  defp build_canonical(params, model) do
+  defp build_canonical(params, model, opts) do
     %{
       model: model,
       messages: get(params, "messages", :messages, []),
@@ -370,7 +389,8 @@ defmodule Agentic.LLM.Provider do
       max_tokens: get(params, "max_tokens", :max_tokens, nil),
       temperature: get(params, "temperature", :temperature, nil),
       tool_choice: get(params, "tool_choice", :tool_choice, nil),
-      cache_control: normalize_cache_control(get(params, "cache_control", :cache_control, nil))
+      cache_control: normalize_cache_control(get(params, "cache_control", :cache_control, nil)),
+      preference: Keyword.get(opts, :preference)
     }
   end
 

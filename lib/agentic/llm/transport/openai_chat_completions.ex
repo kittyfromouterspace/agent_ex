@@ -40,6 +40,7 @@ defmodule Agentic.LLM.Transport.OpenAIChatCompletions do
     base_url = Keyword.fetch!(opts, :base_url)
     api_key = Keyword.fetch!(opts, :api_key)
     extra_headers = Keyword.get(opts, :extra_headers, [])
+    extra_body = Keyword.get(opts, :extra_body, %{})
 
     url = String.trim_trailing(base_url, "/") <> "/chat/completions"
 
@@ -56,6 +57,7 @@ defmodule Agentic.LLM.Transport.OpenAIChatCompletions do
       |> maybe_put(:temperature, Map.get(params, :temperature))
       |> maybe_put(:tools, if(tools == [], do: nil, else: tools))
       |> maybe_put(:tool_choice, tool_choice)
+      |> Map.merge(extra_body)
 
     headers =
       [
