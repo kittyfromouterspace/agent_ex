@@ -409,6 +409,8 @@ defmodule Agentic.LLM.Gateway do
   end
 
   defp emit_gateway_stop(call_id, provider_id, status, duration, usage, raw_response) do
+    {actual_cost, estimated_cost} = extract_costs(provider_id, raw_response, usage)
+
     Agentic.Telemetry.event(
       [:gateway, :request, :stop],
       %{
@@ -422,6 +424,8 @@ defmodule Agentic.LLM.Gateway do
         call_id: call_id,
         provider: provider_id,
         status: status,
+        actual_cost: actual_cost,
+        estimated_cost: estimated_cost,
         raw_response: truncate_raw(raw_response)
       }
     )
@@ -437,6 +441,8 @@ defmodule Agentic.LLM.Gateway do
          ttft_ms,
          final_acc
        ) do
+    {actual_cost, estimated_cost} = extract_costs(provider_id, final_acc, usage)
+
     Agentic.Telemetry.event(
       [:gateway, :request, :stop],
       %{
@@ -453,10 +459,63 @@ defmodule Agentic.LLM.Gateway do
         stream: true,
         chunk_count: chunk_count,
         ttft_ms: ttft_ms,
+        actual_cost: actual_cost,
+        estimated_cost: estimated_cost,
         raw_response: truncate_raw(final_acc)
       }
     )
   end
+
+  # ── Cost extraction ─────────────────────────────────────────────
+
+  # Returns `{actual_cost, estimated_cost}` as `Money.t() | nil` pairs.
+  # `actual_cost` is the provider-reported value (currently only OpenRouter
+  # returns `usage.cost`); `estimated_cost` is computed from catalog
+  # pricing so we always have a number even when the provider doesn't
+  # bill us per response.
+  defp extract_costs(provider_id, raw_response, usage) do
+    actual = actual_cost_from_response(provider_id, raw_response)
+    estimated = estimated_cost_from_usage(provider_id, raw_response, usage)
+    {actual, estimated}
+  end
+
+  defp actual_cost_from_response(:openrouter, %{"usage" => %{"cost" => n}}) when is_number(n) do
+    Money.from_float(:USD, n)
+  rescue
+    _ -> nil
+  end
+
+  defp actual_cost_from_response(_provider_id, _body), do: nil
+
+  defp estimated_cost_from_usage(provider_id, raw_response, usage) do
+    model_id = response_model_id(raw_response)
+    input_tokens = usage[:input_tokens] || 0
+    output_tokens = usage[:output_tokens] || 0
+    cache_read = usage[:cache_read] || 0
+    cache_write = usage[:cache_write] || 0
+
+    with model_id when is_binary(model_id) <- model_id,
+         %Agentic.LLM.Model{cost: %{input: ip, output: op} = cost} when not is_nil(cost) <-
+           Agentic.LLM.Catalog.lookup(provider_id, model_id) do
+      cache_read_rate = cost[:cache_read] || 0.0
+      cache_write_rate = cost[:cache_write] || 0.0
+
+      total =
+        input_tokens / 1_000_000 * ip +
+          output_tokens / 1_000_000 * op +
+          cache_read / 1_000_000 * cache_read_rate +
+          cache_write / 1_000_000 * cache_write_rate
+
+      if total > 0, do: Money.from_float(:USD, total), else: nil
+    else
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp response_model_id(%{"model" => model}) when is_binary(model), do: model
+  defp response_model_id(_), do: nil
 
   defp summarize_messages(nil), do: []
 

@@ -41,6 +41,15 @@ defmodule Agentic.LLM.Model do
     * `:endpoints` — list of provider endpoint maps from the OpenRouter
       `/endpoints` API (provider-specific pricing, uptime, latency,
       throughput). `nil` when not fetched.
+    * `:canonical_id` — provider-agnostic identity for the underlying
+      model weights. Multiple `(provider, model_id)` rows can map to the
+      same `canonical_id` (e.g. `claude-sonnet-4` is reachable via
+      Anthropic direct, Claude Code CLI, and OpenRouter). Resolved by
+      `Agentic.LLM.Canonical.for_model/2` — providers should not
+      hardcode it. `nil` is permitted; the catalog backfills it on
+      insert. Capabilities remain per-pathway: a model that's reached
+      via the Claude Code CLI does not necessarily expose every feature
+      of the same model reached via the direct API.
   """
 
   @type capability :: atom()
@@ -62,7 +71,8 @@ defmodule Agentic.LLM.Model do
           capabilities: MapSet.t(),
           tier_hint: :primary | :lightweight | nil,
           source: :static | :discovered | :user_config,
-          endpoints: [map()] | nil
+          endpoints: [map()] | nil,
+          canonical_id: String.t() | nil
         }
 
   defstruct id: nil,
@@ -74,5 +84,6 @@ defmodule Agentic.LLM.Model do
             capabilities: %MapSet{},
             tier_hint: nil,
             source: :static,
-            endpoints: nil
+            endpoints: nil,
+            canonical_id: nil
 end

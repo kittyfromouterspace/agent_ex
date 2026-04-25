@@ -39,6 +39,8 @@ defmodule Agentic.MixProject do
       {:req, "~> 0.5"},
       {:nimble_options, "~> 1.1"},
       {:recollect, "~> 0.5"},
+      {:ex_money, "~> 5.24"},
+      {:exqlite, "~> 0.27"},
       {:ecto_sql, "~> 3.12", optional: true},
       {:postgrex, "~> 0.19", optional: true},
       {:ecto_libsql, "~> 0.9", optional: true},

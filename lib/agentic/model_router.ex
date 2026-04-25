@@ -29,6 +29,7 @@ defmodule Agentic.ModelRouter do
 
   alias Agentic.LLM.Catalog
   alias Agentic.LLM.Model
+  alias Agentic.LLM.ProviderAccount
   alias Agentic.ModelRouter.Preference
   alias Agentic.ModelRouter.Selector
 
@@ -82,6 +83,18 @@ defmodule Agentic.ModelRouter do
   @doc "Get all available routes for a tier (manual mode)."
   def resolve_all(tier) do
     GenServer.call(__MODULE__, {:resolve_all, tier})
+  catch
+    :exit, _ -> {:error, :router_unavailable}
+  end
+
+  @doc """
+  Get all available routes for a tier, scored against the supplied
+  per-provider accounts (for cost_profile + quota_pressure + availability).
+  Pass `nil` to fall back to default `:pay_per_token`/`:ready` accounts —
+  matches the behaviour of `resolve_all/1`.
+  """
+  def resolve_all_with_accounts(tier, accounts) do
+    GenServer.call(__MODULE__, {:resolve_all_with_accounts, tier, accounts})
   catch
     :exit, _ -> {:error, :router_unavailable}
   end
@@ -191,8 +204,9 @@ defmodule Agentic.ModelRouter do
         :manual ->
           tier = Map.get(ctx, :model_tier, :primary)
           model_filter = Map.get(ctx, :model_filter)
+          accounts = (ctx.metadata || %{})[:provider_accounts]
 
-          case resolve_all(tier) do
+          case resolve_all_with_accounts(tier, accounts) do
             {:ok, routes} ->
               routes = filter_routes(routes, model_filter)
 
@@ -361,6 +375,11 @@ defmodule Agentic.ModelRouter do
     {:reply, {:ok, routes}, state}
   end
 
+  def handle_call({:resolve_all_with_accounts, tier, accounts}, _from, state) do
+    routes = routes_for_tier(tier, state, accounts)
+    {:reply, {:ok, routes}, state}
+  end
+
   def handle_call({:get_sticky, bucket}, _from, state) do
     {:reply, Map.get(state.sticky, bucket), state}
   end
@@ -472,7 +491,7 @@ defmodule Agentic.ModelRouter do
 
   # ----- route resolution via Catalog (manual mode) -----
 
-  defp routes_for_tier(tier, state) do
+  defp routes_for_tier(tier, state, accounts \\ nil) do
     effective_tier = if tier == :any, do: nil, else: tier
 
     catalog_models =
@@ -490,16 +509,54 @@ defmodule Agentic.ModelRouter do
         t -> resolve_override(t, state.tier_overrides)
       end
 
-    all_models = override_models ++ catalog_models
+    all_models =
+      (override_models ++ catalog_models)
+      |> Enum.uniq_by(fn m -> {m.provider, m.id} end)
 
+    # Group pathways by canonical model so we score Anthropic-direct vs
+    # Claude-Code vs OpenRouter as alternatives, not as separate routes.
     routes =
       all_models
-      |> Enum.uniq_by(fn m -> {m.provider, m.id} end)
-      |> Enum.map(&model_to_route/1)
+      |> Enum.group_by(&canonical_key/1)
+      |> Enum.map(fn {canonical, models} ->
+        scored_pathways =
+          models
+          |> Enum.map(fn m ->
+            account = ProviderAccount.for_provider(accounts, m.provider)
+            {m, account, score_for_pathway(m, account)}
+          end)
+          |> Enum.reject(fn {_m, account, _score} ->
+            account.availability == :unavailable
+          end)
+
+        case scored_pathways do
+          [] ->
+            nil
+
+          pathways ->
+            {model, account, pathway_score} =
+              Enum.min_by(pathways, fn {_m, _a, s} -> s end)
+
+            model_to_route(model, account, canonical, pathway_score, pathways)
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
       |> Enum.sort_by(& &1.priority)
 
     {healthy, unhealthy} = Enum.split_with(routes, &route_healthy?/1)
     healthy ++ unhealthy
+  end
+
+  # Stable canonical key — falls back to "<provider>:<id>" if the
+  # canonical_id was never resolved.
+  defp canonical_key(%Model{canonical_id: nil} = m), do: "#{m.provider}:#{m.id}"
+  defp canonical_key(%Model{canonical_id: c}) when is_binary(c), do: c
+
+  # Compute the pathway score for `(model, account)`. Default preference
+  # is `:optimize_price`; the manual-mode tier flow pre-dates per-context
+  # preferences and historical behaviour matches "cheapest available".
+  defp score_for_pathway(%Model{} = model, %ProviderAccount{} = account) do
+    Preference.score_pathway(model, account, :optimize_price)
   end
 
   defp resolve_override(tier, overrides) do
@@ -524,13 +581,39 @@ defmodule Agentic.ModelRouter do
   end
 
   defp model_to_route(%Model{} = m) do
+    account = ProviderAccount.default(m.provider)
+    canonical = m.canonical_id || canonical_key(m)
+    pathway_score = score_for_pathway(m, account)
+    model_to_route(m, account, canonical, pathway_score, [{m, account, pathway_score}])
+  end
+
+  defp model_to_route(%Model{} = m, %ProviderAccount{} = account, canonical, pathway_score, pathways) do
     health = lookup_health(m.id)
     status = if route_healthy_record?(health), do: :healthy, else: :unhealthy
 
+    fallbacks =
+      pathways
+      |> Enum.reject(fn {pm, _a, _s} -> pm.id == m.id and pm.provider == m.provider end)
+      |> Enum.sort_by(fn {_pm, _a, s} -> s end)
+      |> Enum.map(fn {pm, pa, s} ->
+        %{
+          provider_name: Atom.to_string(pm.provider),
+          model_id: pm.id,
+          account_id: pa.account_id,
+          cost_profile: pa.cost_profile,
+          score: s
+        }
+      end)
+
     %{
-      id: "catalog-#{m.provider}/#{m.id}",
+      id: "catalog-#{canonical}",
+      canonical_model_id: canonical,
       provider_name: Atom.to_string(m.provider),
       model_id: m.id,
+      account_id: account.account_id,
+      cost_profile: account.cost_profile,
+      pathway_score: pathway_score,
+      pathway_fallbacks: fallbacks,
       label: m.label || m.id,
       context_window: m.context_window,
       max_output_tokens: m.max_output_tokens,
@@ -765,9 +848,16 @@ defmodule Agentic.ModelRouter do
         _ -> {:primary, nil}
       end
 
+    canonical =
+      case lookup_model(provider_name, model_id) do
+        nil -> nil
+        model -> model.canonical_id || canonical_key(model)
+      end
+
     record = %{
       provider_name: provider_name,
       model_id: model_id,
+      canonical_id: canonical,
       set_at: now
     }
 
@@ -831,6 +921,7 @@ defmodule Agentic.ModelRouter do
     %{
       provider_name: Map.get(map, "provider_name") || Map.get(map, :provider_name),
       model_id: Map.get(map, "model_id") || Map.get(map, :model_id),
+      canonical_id: Map.get(map, "canonical_id") || Map.get(map, :canonical_id),
       set_at: Map.get(map, "set_at") || Map.get(map, :set_at) || 0
     }
   end

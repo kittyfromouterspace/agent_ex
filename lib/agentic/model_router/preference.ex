@@ -30,6 +30,7 @@ defmodule Agentic.ModelRouter.Preference do
   def default, do: :optimize_price
 
   alias Agentic.LLM.Model
+  alias Agentic.LLM.ProviderAccount
   alias Agentic.ModelRouter.Analyzer
 
   @doc """
@@ -159,4 +160,59 @@ defmodule Agentic.ModelRouter.Preference do
       0.0
     end
   end
+
+  # ----- multi-pathway scoring (account-aware) -----
+
+  @doc """
+  Score a `(model, account)` pathway pair within a canonical group.
+
+  Used by `Agentic.ModelRouter` in manual mode after `Catalog.by_canonical/1`
+  has grouped pathways. Lower is better.
+
+  The account contributes three terms on top of the base price/speed
+  preference:
+
+    * `cost_profile_score/3` — strongly prefers `:free >
+      :subscription_included > :subscription_metered > :pay_per_token`
+      under `:optimize_price`; mild speed bonus for subscriptions
+      under `:optimize_speed`.
+    * `Agentic.LLM.ProviderAccount.quota_pressure/1` — taper away from
+      a subscription as it approaches its weekly cap (0 at <70%, ramp
+      through 90%, cliff above).
+    * `availability_score/1` — `:ready` adds 0; `:degraded` +2;
+      `{:rate_limited, _}` +8; `:unavailable` is filtered upstream.
+
+  Distinct from `score/3` (the analyzer-driven auto-mode scorer) which
+  takes an `Analyzer.analysis()` instead of an account.
+  """
+  @spec score_pathway(Model.t(), ProviderAccount.t(), preference()) :: float()
+  def score_pathway(%Model{} = model, %ProviderAccount{} = account, preference) do
+    base_score(model, preference) +
+      cost_profile_score(model, account, preference) +
+      ProviderAccount.quota_pressure(account) +
+      availability_score(account)
+  end
+
+  @doc false
+  def cost_profile_score(model, %ProviderAccount{cost_profile: profile}, preference) do
+    case {profile, preference} do
+      {:free, :optimize_price} -> -10.0
+      {:subscription_included, :optimize_price} -> -5.0
+      {:subscription_metered, :optimize_price} -> 0.0
+      {:pay_per_token, :optimize_price} -> base_score(model, :optimize_price)
+      {:free, :optimize_speed} -> 0.0
+      {:subscription_included, :optimize_speed} -> -2.0
+      {:subscription_metered, :optimize_speed} -> -1.0
+      {:pay_per_token, :optimize_speed} -> 0.0
+    end
+  end
+
+  @doc false
+  def availability_score(%ProviderAccount{availability: :ready}), do: 0.0
+  def availability_score(%ProviderAccount{availability: :degraded}), do: 2.0
+  def availability_score(%ProviderAccount{availability: {:rate_limited, _until}}), do: 8.0
+  # :unavailable should have been filtered out before scoring; if it
+  # leaks through give it an enormous penalty so the router still
+  # picks a different pathway.
+  def availability_score(%ProviderAccount{availability: :unavailable}), do: 1_000.0
 end

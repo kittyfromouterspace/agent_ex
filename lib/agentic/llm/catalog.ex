@@ -13,7 +13,7 @@ defmodule Agentic.LLM.Catalog do
 
   use GenServer
 
-  alias Agentic.LLM.{Credentials, Model}
+  alias Agentic.LLM.{Canonical, Credentials, Model}
 
   require Logger
 
@@ -48,12 +48,28 @@ defmodule Agentic.LLM.Catalog do
     * `:provider` — filter by provider atom
     * `:tier` — filter by tier_hint (`:primary`, `:lightweight`)
     * `:has` — capability tag or list of tags (all must be present)
+    * `:requires` — alias for `:has` (per the multi-pathway routing
+      design); both work and stack
+    * `:canonical` — filter by `canonical_id` string; returns every
+      pathway model that maps to the given canonical
     * `:source` — filter by source (`:static`, `:discovered`, `:user_config`)
   """
   def find(opts) when is_list(opts) do
     GenServer.call(__MODULE__, {:find, opts})
   catch
     :exit, _ -> []
+  end
+
+  @doc """
+  Group all `tier`-eligible models by `canonical_id`.
+
+  Returns `%{canonical_id => [%Model{}, ...]}`. Used by the
+  multi-pathway router to score pathways within each canonical group.
+  """
+  def by_canonical(opts \\ []) when is_list(opts) do
+    GenServer.call(__MODULE__, {:by_canonical, opts})
+  catch
+    :exit, _ -> %{}
   end
 
   @doc "Look up a single model by provider and model id."
@@ -106,16 +122,16 @@ defmodule Agentic.LLM.Catalog do
   end
 
   def handle_call({:find, opts}, _from, state) do
-    models = Map.values(state.models)
+    {:reply, do_find(state, opts), state}
+  end
 
-    filtered =
-      models
-      |> maybe_filter_provider(opts)
-      |> maybe_filter_tier(opts)
-      |> maybe_filter_has(opts)
-      |> maybe_filter_source(opts)
+  def handle_call({:by_canonical, opts}, _from, state) do
+    grouped =
+      state
+      |> do_find(opts)
+      |> Enum.group_by(fn model -> model.canonical_id || "#{model.provider}:#{model.id}" end)
 
-    {:reply, filtered, state}
+    {:reply, grouped, state}
   end
 
   def handle_call({:lookup, provider_id, model_id}, _from, state) do
@@ -229,10 +245,22 @@ defmodule Agentic.LLM.Catalog do
     |> Map.filter(fn {{pid, _}, _} -> to_string(pid) != pid_str end)
     |> then(fn base ->
       Enum.reduce(new_models, base, fn model, acc ->
-        Map.put(acc, {model.provider || provider_id, model.id}, model)
+        provider = model.provider || provider_id
+        backfilled = backfill_canonical(model, provider)
+        Map.put(acc, {provider, backfilled.id}, backfilled)
       end)
     end)
   end
+
+  # Providers don't set `canonical_id` themselves — Catalog resolves it
+  # via `Agentic.LLM.Canonical.for_model/2` on insert. If providers DO
+  # set it (e.g. dynamic discovery already mapped one), we keep their
+  # value as the override.
+  defp backfill_canonical(%Model{canonical_id: nil} = m, provider) do
+    %{m | canonical_id: Canonical.for_model(provider, m.id)}
+  end
+
+  defp backfill_canonical(%Model{} = m, _provider), do: m
 
   defp enabled_providers do
     try do
@@ -320,7 +348,11 @@ defmodule Agentic.LLM.Catalog do
     Agentic.Config.providers()
     |> Enum.flat_map(fn module ->
       module.default_models()
-      |> Enum.map(fn model -> {{model.provider || module.id(), model.id}, model} end)
+      |> Enum.map(fn model ->
+        provider = model.provider || module.id()
+        backfilled = backfill_canonical(model, provider)
+        {{provider, backfilled.id}, backfilled}
+      end)
     end)
     |> Map.new()
   end
@@ -338,7 +370,8 @@ defmodule Agentic.LLM.Catalog do
         "cost" => m.cost,
         "capabilities" => MapSet.to_list(m.capabilities),
         "tier_hint" => m.tier_hint,
-        "source" => m.source
+        "source" => m.source,
+        "canonical_id" => m.canonical_id
       }
     end)
   end
@@ -356,10 +389,12 @@ defmodule Agentic.LLM.Catalog do
         capabilities:
           data["capabilities"] |> List.wrap() |> Enum.map(&to_atom_if_possible/1) |> MapSet.new(),
         tier_hint: to_atom_if_possible(data["tier_hint"]),
-        source: (data["source"] || "static") |> to_atom_if_possible()
+        source: (data["source"] || "static") |> to_atom_if_possible(),
+        canonical_id: data["canonical_id"]
       }
 
-      {{model.provider, model.id}, model}
+      backfilled = backfill_canonical(model, model.provider)
+      {{backfilled.provider, backfilled.id}, backfilled}
     end)
     |> Map.new()
   end
@@ -370,6 +405,17 @@ defmodule Agentic.LLM.Catalog do
   defp to_atom_if_possible(a) when is_atom(a), do: a
 
   # ----- filter helpers -----
+
+  defp do_find(state, opts) do
+    state.models
+    |> Map.values()
+    |> maybe_filter_provider(opts)
+    |> maybe_filter_tier(opts)
+    |> maybe_filter_has(opts)
+    |> maybe_filter_requires(opts)
+    |> maybe_filter_canonical(opts)
+    |> maybe_filter_source(opts)
+  end
 
   defp maybe_filter_provider(models, opts) do
     case Keyword.get(opts, :provider) do
@@ -404,6 +450,32 @@ defmodule Agentic.LLM.Catalog do
     case Keyword.get(opts, :source) do
       nil -> models
       source -> Enum.filter(models, &(&1.source == source))
+    end
+  end
+
+  # `:requires` is the per-pathway capability filter from the
+  # multi-pathway routing design. Identical semantics to `:has`; both
+  # are accepted so callers can use whichever name reads better.
+  defp maybe_filter_requires(models, opts) do
+    case Keyword.get(opts, :requires) do
+      nil ->
+        models
+
+      caps when is_list(caps) ->
+        Enum.filter(models, fn m ->
+          Enum.all?(caps, &MapSet.member?(m.capabilities, &1))
+        end)
+
+      cap when is_atom(cap) ->
+        Enum.filter(models, &MapSet.member?(&1.capabilities, cap))
+    end
+  end
+
+  defp maybe_filter_canonical(models, opts) do
+    case Keyword.get(opts, :canonical) do
+      nil -> models
+      canonical when is_binary(canonical) ->
+        Enum.filter(models, &(&1.canonical_id == canonical))
     end
   end
 end

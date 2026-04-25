@@ -40,17 +40,24 @@ defmodule Agentic.Protocol.Codex do
     base_env = profile_config[:env] || %{}
     env_with_gateway = Agentic.LLM.Gateway.inject_env(base_env, :openai)
 
+    model_args = build_model_args(profile_config[:model])
+
     Map.merge(
       %{
         command: @cli_name,
-        args: default_args() ++ (profile_config[:extra_args] || []),
+        args: default_args() ++ model_args ++ (profile_config[:extra_args] || []),
         env: env_with_gateway,
         system_prompt_mode: :prepend,
-        system_prompt_when: :always
+        system_prompt_when: :always,
+        model_arg: "--model"
       },
       profile_config[:cli_config] || %{}
     )
   end
+
+  defp build_model_args(nil), do: []
+  defp build_model_args(""), do: []
+  defp build_model_args(model_id) when is_binary(model_id), do: ["--model", model_id]
 
   @impl true
   def available? do
