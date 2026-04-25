@@ -100,6 +100,20 @@ defmodule Agentic.ModelRouter do
   end
 
   @doc """
+  Like `resolve_all_with_accounts/2`, but also accepts a
+  `canonical_id => preferred_provider_atom` map. Pathways whose
+  provider is the user's preferred pathway for their canonical group
+  get a strong score bonus (acts as a hard tie-breaker — within a
+  canonical group, the user's pick wins over the cost-derived ranking
+  unless that pick is `:unavailable`).
+  """
+  def resolve_all_with_context(tier, accounts, pathway_preferences) do
+    GenServer.call(__MODULE__, {:resolve_all_with_context, tier, accounts, pathway_preferences})
+  catch
+    :exit, _ -> {:error, :router_unavailable}
+  end
+
+  @doc """
   Resolve routes for a context — dispatches to auto or manual based on
   `ctx.model_selection_mode`.
   """
@@ -205,8 +219,9 @@ defmodule Agentic.ModelRouter do
           tier = Map.get(ctx, :model_tier, :primary)
           model_filter = Map.get(ctx, :model_filter)
           accounts = (ctx.metadata || %{})[:provider_accounts]
+          pathway_preferences = (ctx.metadata || %{})[:pathway_preferences] || %{}
 
-          case resolve_all_with_accounts(tier, accounts) do
+          case resolve_all_with_context(tier, accounts, pathway_preferences) do
             {:ok, routes} ->
               routes = filter_routes(routes, model_filter)
 
@@ -380,6 +395,11 @@ defmodule Agentic.ModelRouter do
     {:reply, {:ok, routes}, state}
   end
 
+  def handle_call({:resolve_all_with_context, tier, accounts, pathway_preferences}, _from, state) do
+    routes = routes_for_tier(tier, state, accounts, pathway_preferences)
+    {:reply, {:ok, routes}, state}
+  end
+
   def handle_call({:get_sticky, bucket}, _from, state) do
     {:reply, Map.get(state.sticky, bucket), state}
   end
@@ -491,7 +511,7 @@ defmodule Agentic.ModelRouter do
 
   # ----- route resolution via Catalog (manual mode) -----
 
-  defp routes_for_tier(tier, state, accounts \\ nil) do
+  defp routes_for_tier(tier, state, accounts \\ nil, pathway_preferences \\ %{}) do
     effective_tier = if tier == :any, do: nil, else: tier
 
     catalog_models =
@@ -519,11 +539,15 @@ defmodule Agentic.ModelRouter do
       all_models
       |> Enum.group_by(&canonical_key/1)
       |> Enum.map(fn {canonical, models} ->
+        preferred_provider = Map.get(pathway_preferences, canonical)
+
         scored_pathways =
           models
           |> Enum.map(fn m ->
             account = ProviderAccount.for_provider(accounts, m.provider)
-            {m, account, score_for_pathway(m, account)}
+            base = score_for_pathway(m, account)
+            preference_bonus = if preferred_provider == m.provider, do: -100.0, else: 0.0
+            {m, account, base + preference_bonus}
           end)
           |> Enum.reject(fn {_m, account, _score} ->
             account.availability == :unavailable
