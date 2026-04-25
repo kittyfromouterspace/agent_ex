@@ -25,33 +25,49 @@ defmodule Agentic.ModelRouter.Analyzer do
           explanation: String.t()
         }
 
+  # Bypass the LLM analysis call for trivially short requests or when
+  # the caller has constrained selection to free models. Both cases
+  # have low signal-to-noise: scoring barely differs by complexity, and
+  # the analysis call itself adds latency comparable to the saved cost.
+  @short_request_bypass_chars 200
+
   @doc """
   Analyze a user request for complexity and capability requirements.
 
   Uses the cheapest available model (preferring free models) to classify
-  the request. Falls back to heuristic analysis if no model is available.
+  the request. Falls back to heuristic analysis if no model is available
+  or when the request is short enough that the LLM call isn't worth it.
   """
   @spec analyze(String.t(), keyword()) :: {:ok, analysis()}
   def analyze(request, opts \\ []) do
     context_summary = Keyword.get(opts, :context_summary, "")
     session_id = Keyword.get(opts, :session_id)
     llm_chat = Keyword.get(opts, :llm_chat)
+    model_filter = Keyword.get(opts, :model_filter)
 
     start_time = System.monotonic_time()
 
-    method = if llm_chat, do: :llm, else: :heuristic
+    bypass_reason = bypass_llm_analysis(request, model_filter)
+
+    method =
+      cond do
+        bypass_reason -> :heuristic
+        llm_chat -> :llm
+        true -> :heuristic
+      end
 
     Agentic.Telemetry.event([:model_router, :analysis, :start], %{}, %{
       method: method,
       session_id: session_id,
-      request_length: String.length(request)
+      request_length: String.length(request),
+      bypass_reason: bypass_reason
     })
 
     result =
-      if llm_chat do
-        analyze_via_llm(request, context_summary, llm_chat, session_id)
-      else
-        analyze_heuristic(request)
+      cond do
+        bypass_reason -> analyze_heuristic(request)
+        llm_chat -> analyze_via_llm(request, context_summary, llm_chat, session_id)
+        true -> analyze_heuristic(request)
       end
 
     duration = System.monotonic_time() - start_time
@@ -75,6 +91,14 @@ defmodule Agentic.ModelRouter.Analyzer do
     )
 
     {:ok, analysis}
+  end
+
+  defp bypass_llm_analysis(request, model_filter) do
+    cond do
+      model_filter == :free_only -> :free_only_filter
+      String.length(request || "") < @short_request_bypass_chars -> :short_request
+      true -> nil
+    end
   end
 
   defp analyze_via_llm(request, context_summary, llm_chat, session_id) do

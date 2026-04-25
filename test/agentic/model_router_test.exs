@@ -101,6 +101,35 @@ defmodule Agentic.ModelRouterTest do
     end
   end
 
+  describe "resolve_all/1 ordering" do
+    test ":primary tier puts paid configured/static models ahead of free discovered ones" do
+      {:ok, routes} = ModelRouter.resolve_all(:primary)
+
+      paid = Enum.reject(routes, &MapSet.member?(&1.capabilities, :free))
+      free = Enum.filter(routes, &MapSet.member?(&1.capabilities, :free))
+
+      if paid != [] and free != [] do
+        max_paid_priority = paid |> Enum.map(& &1.priority) |> Enum.max()
+        min_free_priority = free |> Enum.map(& &1.priority) |> Enum.min()
+
+        assert max_paid_priority < min_free_priority,
+               "expected every paid :primary route to outrank every free one"
+      end
+    end
+
+    test "every :primary route is conversational (has :chat and :tools)" do
+      {:ok, routes} = ModelRouter.resolve_all(:primary)
+
+      Enum.each(routes, fn route ->
+        assert MapSet.member?(route.capabilities, :chat),
+               "route #{route.provider_name}/#{route.model_id} on :primary missing :chat"
+
+        assert MapSet.member?(route.capabilities, :tools),
+               "route #{route.provider_name}/#{route.model_id} on :primary missing :tools"
+      end)
+    end
+  end
+
   describe "resolve_for_context/1 with :free_only filter" do
     test "in manual mode, filters routes to free models only" do
       ctx =

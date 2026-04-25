@@ -45,7 +45,8 @@ defmodule Agentic.ModelRouter.Selector do
       Analyzer.analyze(request,
         context_summary: context_summary,
         llm_chat: llm_chat,
-        session_id: session_id
+        session_id: session_id,
+        model_filter: model_filter
       )
 
     models = fetch_candidates(analysis, model_filter)
@@ -136,7 +137,8 @@ defmodule Agentic.ModelRouter.Selector do
       Analyzer.analyze(request,
         context_summary: context_summary,
         llm_chat: llm_chat,
-        session_id: session_id
+        session_id: session_id,
+        model_filter: model_filter
       )
 
     models = fetch_candidates(analysis, model_filter)

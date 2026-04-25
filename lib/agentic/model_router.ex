@@ -36,6 +36,25 @@ defmodule Agentic.ModelRouter do
 
   @health_table :agentic_route_health
 
+  # Where we persist route health between restarts. Uses ms-since-epoch
+  # timestamps so cooldowns and "verified" markers survive boots.
+  @health_path Path.join([System.user_home() || ".", ".agentic", "route_health.json"])
+  @sticky_path Path.join([System.user_home() || ".", ".agentic", "route_sticky.json"])
+
+  # Debounce window for health flushes. Casts arrive in bursts; we
+  # coalesce them into one disk write.
+  @flush_debounce_ms 1_500
+
+  # A route is treated as "recently broken" if its last failure was
+  # within this window without a subsequent success. Boosts the priority
+  # of routes that have actually worked.
+  @recent_failure_window_ms 30 * 60 * 1000
+
+  # Sticky routes expire after this window so we re-explore the catalog
+  # periodically even when the sticky pick is still working — newly
+  # added or recovered models get a chance to climb back.
+  @sticky_max_age_ms 6 * 60 * 60 * 1000
+
   @type selection_mode :: :manual | :auto
 
   def start_link(opts \\ []) do
@@ -82,6 +101,35 @@ defmodule Agentic.ModelRouter do
       selection_mode: mode
     })
 
+    case lookup_sticky(ctx) do
+      {:ok, sticky_route, fallback_routes} ->
+        Logger.debug(
+          "ModelRouter: sticky route hit #{sticky_route.provider_name}/#{sticky_route.model_id}"
+        )
+
+        Agentic.Telemetry.event(
+          [:model_router, :resolve, :stop],
+          %{duration: System.monotonic_time() - start_time, route_count: 1, sticky: true},
+          %{
+            session_id: session_id,
+            selection_mode: mode,
+            tier: sticky_route_tier(ctx),
+            selected_provider: sticky_route.provider_name,
+            selected_model_id: sticky_route.model_id
+          }
+        )
+
+        case mode do
+          :auto -> {:ok, [sticky_route | fallback_routes], nil, []}
+          :manual -> {:ok, [sticky_route | fallback_routes], nil}
+        end
+
+      :miss ->
+        do_resolve_for_context(ctx, mode, session_id, start_time)
+    end
+  end
+
+  defp do_resolve_for_context(ctx, mode, session_id, start_time) do
     result =
       case mode do
         :auto ->
@@ -204,9 +252,16 @@ defmodule Agentic.ModelRouter do
     result
   end
 
-  @doc "Report a successful call for a route."
-  def report_success(provider_name, model_id) do
-    GenServer.cast(__MODULE__, {:report_success, provider_name, model_id})
+  @doc """
+  Report a successful call for a route.
+
+  Pass `sticky: %{tier: tier, filter: filter}` to mark this route as the
+  current sticky pick for that bucket; future `resolve_for_context/1`
+  calls with the same bucket will return this route directly without
+  re-running selection.
+  """
+  def report_success(provider_name, model_id, opts \\ []) do
+    GenServer.cast(__MODULE__, {:report_success, provider_name, model_id, opts})
   end
 
   @doc "Report a failed call for a route."
@@ -239,7 +294,15 @@ defmodule Agentic.ModelRouter do
   @impl true
   def init(_opts) do
     :ets.new(@health_table, [:named_table, :set, :public, read_concurrency: true])
-    {:ok, %{tier_overrides: %{}}}
+    load_health_from_disk()
+
+    {:ok,
+     %{
+       tier_overrides: %{},
+       flush_pending?: false,
+       sticky_pending?: false,
+       sticky: load_sticky_from_disk()
+     }}
   end
 
   @impl true
@@ -298,6 +361,10 @@ defmodule Agentic.ModelRouter do
     {:reply, {:ok, routes}, state}
   end
 
+  def handle_call({:get_sticky, bucket}, _from, state) do
+    {:reply, Map.get(state.sticky, bucket), state}
+  end
+
   def handle_call(:status, _from, state) do
     health =
       @health_table
@@ -321,22 +388,41 @@ defmodule Agentic.ModelRouter do
     {:noreply, %{state | tier_overrides: %{}}}
   end
 
-  def handle_cast({:report_success, _provider_name, model_id}, state) do
+  def handle_cast({:report_success, provider_name, model_id, opts}, state) do
+    now = now_ms()
+
     update_health(model_id, fn h ->
       %{
         h
         | error_count: 0,
           cooldown_until: nil,
-          last_success_at: now_ms(),
-          consecutive_successes: (h.consecutive_successes || 0) + 1
+          last_success_at: now,
+          last_error_kind: nil,
+          consecutive_successes: (h.consecutive_successes || 0) + 1,
+          verified_at: h.verified_at || now
       }
     end)
 
-    {:noreply, state}
+    state =
+      case Keyword.get(opts, :sticky) do
+        %{} = bucket ->
+          set_sticky(state, bucket, provider_name, model_id, now)
+
+        _ ->
+          state
+      end
+
+    {:noreply, state |> schedule_flush() |> schedule_sticky_flush()}
+  end
+
+  # Backwards compat for older callers that didn't pass opts.
+  def handle_cast({:report_success, provider_name, model_id}, state) do
+    handle_cast({:report_success, provider_name, model_id, []}, state)
   end
 
   def handle_cast({:report_error, _provider_name, model_id, failure_type, opts}, state) do
     retry_after_ms = Keyword.get(opts, :retry_after_ms)
+    now = now_ms()
 
     update_health(model_id, fn h ->
       new_count = h.error_count + 1
@@ -344,11 +430,15 @@ defmodule Agentic.ModelRouter do
       cooldown_until =
         cond do
           is_integer(retry_after_ms) and retry_after_ms > 0 ->
-            now_ms() + retry_after_ms
+            now + retry_after_ms
 
           new_count >= 2 ->
-            cooldown = if failure_type == :rate_limit, do: 240_000, else: 120_000
-            now_ms() + cooldown
+            now + cooldown_for(failure_type)
+
+          failure_type in [:auth_error, :empty_response] ->
+            # First failure of these kinds is enough to demote — they
+            # don't tend to flip back without external action.
+            now + cooldown_for(failure_type)
 
           true ->
             h.cooldown_until
@@ -358,12 +448,26 @@ defmodule Agentic.ModelRouter do
         h
         | error_count: new_count,
           cooldown_until: cooldown_until,
-          last_error_at: now_ms(),
+          last_error_at: now,
+          last_error_kind: failure_type,
           consecutive_successes: 0
       }
     end)
 
-    {:noreply, state}
+    state = drop_matching_sticky(state, model_id)
+
+    {:noreply, state |> schedule_flush() |> schedule_sticky_flush()}
+  end
+
+  @impl true
+  def handle_info(:flush_health, state) do
+    flush_health_to_disk()
+    {:noreply, %{state | flush_pending?: false}}
+  end
+
+  def handle_info(:flush_sticky, state) do
+    flush_sticky_to_disk(state.sticky)
+    {:noreply, %{state | sticky_pending?: false}}
   end
 
   # ----- route resolution via Catalog (manual mode) -----
@@ -420,7 +524,8 @@ defmodule Agentic.ModelRouter do
   end
 
   defp model_to_route(%Model{} = m) do
-    status = if route_healthy_by_id?(m.id), do: :healthy, else: :unhealthy
+    health = lookup_health(m.id)
+    status = if route_healthy_record?(health), do: :healthy, else: :unhealthy
 
     %{
       id: "catalog-#{m.provider}/#{m.id}",
@@ -430,45 +535,117 @@ defmodule Agentic.ModelRouter do
       context_window: m.context_window,
       max_output_tokens: m.max_output_tokens,
       capabilities: m.capabilities,
-      priority: route_priority(m),
+      priority: route_priority(m, health),
       source: m.source,
       status: status,
-      cost: m.cost
+      cost: m.cost,
+      endpoints: m.endpoints
     }
   end
 
-  defp route_priority(model) do
+  # Lower number = higher priority. Layered scoring:
+  #   * tier_hint sets the bucket (primary < lightweight < tier-less)
+  #   * source breaks ties so user_config beats static beats discovered
+  #   * free models within a bucket sort below paid ones, since
+  #     OpenRouter free routes are rate-limited and frequently unreliable
+  #   * a route that has *actually worked* (verified_at set) gets a
+  #     small boost over peers that haven't been tried
+  #   * a route that recently failed without a subsequent success gets
+  #     a large penalty so we don't keep slamming a broken endpoint
+  #   * endpoint uptime from OpenRouter's /endpoints API gives a
+  #     real-time reliability signal for multi-provider models
+  defp route_priority(model, health) do
+    base =
+      case model.tier_hint do
+        :primary -> 100
+        :lightweight -> 200
+        _ -> 500
+      end
+
+    source_bonus =
+      case model.source do
+        :user_config -> 0
+        :static -> 5
+        :discovered -> 15
+        _ -> 20
+      end
+
+    free_penalty = if MapSet.member?(model.capabilities, :free), do: 40, else: 0
+    verified_bonus = if health.verified_at, do: -3, else: 0
+
+    failure_penalty =
+      cond do
+        recently_failed?(health) and not recently_succeeded?(health) ->
+          # A persistent failure outweighs source/free preferences but
+          # still keeps the route in the candidate list — the cooldown
+          # eventually expires and another reorder may pick it back up.
+          80
+
+        true ->
+          0
+      end
+
+    endpoint_penalty = endpoint_health_penalty(model.endpoints)
+
+    base + source_bonus + free_penalty + verified_bonus + failure_penalty + endpoint_penalty
+  end
+
+  # Compute a penalty based on OpenRouter endpoint uptime data.
+  # When no endpoint data is available (nil or empty) we apply no penalty.
+  # When average uptime is poor we penalise the model so healthier
+  # alternatives rise above it.
+  defp endpoint_health_penalty(nil), do: 0
+  defp endpoint_health_penalty([]), do: 0
+
+  defp endpoint_health_penalty(endpoints) do
+    avg_uptime =
+      endpoints
+      |> Enum.map(& &1[:uptime_last_30m])
+      |> Enum.reject(&is_nil/1)
+      |> average_uptime()
+
     cond do
-      model.tier_hint == :primary -> 10
-      model.tier_hint == :lightweight -> 20
-      MapSet.member?(model.capabilities, :free) -> 30
+      avg_uptime >= 99 -> -3
+      avg_uptime >= 95 -> 0
+      avg_uptime >= 90 -> 15
+      avg_uptime >= 80 -> 30
       true -> 50
+    end
+  end
+
+  defp average_uptime([]), do: 100.0
+
+  defp average_uptime(values) do
+    Enum.sum(values) / length(values)
+  end
+
+  defp recently_failed?(%{last_error_at: nil}), do: false
+  defp recently_failed?(%{last_error_at: ts}), do: now_ms() - ts < @recent_failure_window_ms
+
+  defp recently_succeeded?(%{last_success_at: nil}), do: false
+
+  defp recently_succeeded?(%{last_success_at: success_at, last_error_at: error_at}) do
+    case error_at do
+      nil -> true
+      err -> success_at > err
     end
   end
 
   defp route_healthy?(%{status: :unhealthy}), do: false
   defp route_healthy?(%{status: _}), do: true
 
-  defp route_healthy_by_id?(model_id) do
-    case :ets.lookup(@health_table, model_id) do
-      [{_, health}] ->
-        case health.cooldown_until do
-          nil -> true
-          ts -> now_ms() > ts
-        end
+  defp route_healthy_record?(%{cooldown_until: nil}), do: true
+  defp route_healthy_record?(%{cooldown_until: ts}), do: now_ms() > ts
 
-      [] ->
-        true
+  defp lookup_health(model_id) do
+    case :ets.lookup(@health_table, model_id) do
+      [{_, h}] -> Map.merge(default_health(), h)
+      [] -> default_health()
     end
   end
 
   defp update_health(model_id, fun) do
-    current =
-      case :ets.lookup(@health_table, model_id) do
-        [{_, h}] -> h
-        [] -> default_health()
-      end
-
+    current = lookup_health(model_id)
     :ets.insert(@health_table, {model_id, fun.(current)})
   end
 
@@ -478,11 +655,270 @@ defmodule Agentic.ModelRouter do
       cooldown_until: nil,
       last_success_at: nil,
       last_error_at: nil,
-      consecutive_successes: 0
+      last_error_kind: nil,
+      consecutive_successes: 0,
+      verified_at: nil
     }
   end
 
-  defp now_ms, do: System.monotonic_time(:millisecond)
+  defp cooldown_for(:rate_limit), do: 240_000
+  defp cooldown_for(:auth_error), do: 30 * 60 * 1000
+  defp cooldown_for(:empty_response), do: 30 * 60 * 1000
+  defp cooldown_for(_), do: 120_000
+
+  # Wall-clock time so cooldowns survive restarts. Monotonic time would
+  # reset on every boot and effectively erase persisted health.
+  defp now_ms, do: System.system_time(:millisecond)
+
+  # ----- sticky route selection -----
+
+  # The "bucket" is the dimension the sticky pick depends on: tier and
+  # filter together. Auto and manual modes share the same bucket so that
+  # toggling between them doesn't blow away the sticky pick — the
+  # underlying choice (which model to call) is the same either way.
+  defp bucket_key(ctx) do
+    tier = Map.get(ctx, :model_tier, :primary) || :primary
+    filter = Map.get(ctx, :model_filter)
+    {tier, filter}
+  end
+
+  defp lookup_sticky(ctx) do
+    bucket = bucket_key(ctx)
+
+    case sticky_record(bucket) do
+      nil ->
+        :miss
+
+      %{provider_name: provider, model_id: model_id, set_at: set_at} ->
+        if now_ms() - set_at > @sticky_max_age_ms do
+          :miss
+        else
+          state = GenServer.call(__MODULE__, :status)
+          # ETS-only check; cheaper than re-running the full pipeline.
+          health = lookup_health(model_id)
+
+          model = lookup_model(provider, model_id)
+
+          cond do
+            is_nil(model) ->
+              :miss
+
+            not route_healthy_record?(health) ->
+              :miss
+
+            true ->
+              route = model_to_route(model)
+              fallback = remaining_routes(model, ctx, state)
+              {:ok, route, fallback}
+          end
+        end
+    end
+  rescue
+    _ -> :miss
+  catch
+    :exit, _ -> :miss
+  end
+
+  defp sticky_record(bucket) do
+    GenServer.call(__MODULE__, {:get_sticky, bucket})
+  catch
+    :exit, _ -> nil
+  end
+
+  defp sticky_route_tier(ctx) do
+    {tier, _filter} = bucket_key(ctx)
+    tier
+  end
+
+  defp lookup_model(provider_name, model_id) when is_binary(provider_name) do
+    case safe_atom(provider_name) do
+      nil -> nil
+      provider -> Catalog.lookup(provider, model_id)
+    end
+  end
+
+  defp lookup_model(_, _), do: nil
+
+  defp remaining_routes(sticky_model, ctx, state) do
+    tier = Map.get(ctx, :model_tier, :primary) || :primary
+    filter = Map.get(ctx, :model_filter)
+
+    routes =
+      tier
+      |> routes_for_tier(state)
+      |> Enum.reject(fn r ->
+        r.provider_name == Atom.to_string(sticky_model.provider) and
+          r.model_id == sticky_model.id
+      end)
+
+    case filter do
+      :free_only -> Enum.filter(routes, &MapSet.member?(&1.capabilities, :free))
+      _ -> routes
+    end
+  end
+
+  defp set_sticky(state, %{} = bucket_input, provider_name, model_id, now) do
+    bucket =
+      case bucket_input do
+        %{tier: t, filter: f} -> {t || :primary, f}
+        %{tier: t} -> {t || :primary, nil}
+        _ -> {:primary, nil}
+      end
+
+    record = %{
+      provider_name: provider_name,
+      model_id: model_id,
+      set_at: now
+    }
+
+    %{state | sticky: Map.put(state.sticky, bucket, record)}
+  end
+
+  defp drop_matching_sticky(state, model_id) do
+    pruned =
+      state.sticky
+      |> Enum.reject(fn {_bucket, %{model_id: id}} -> id == model_id end)
+      |> Map.new()
+
+    %{state | sticky: pruned}
+  end
+
+  defp schedule_sticky_flush(%{sticky_pending?: true} = state), do: state
+
+  defp schedule_sticky_flush(state) do
+    Process.send_after(self(), :flush_sticky, @flush_debounce_ms)
+    %{state | sticky_pending?: true}
+  end
+
+  defp flush_sticky_to_disk(sticky) do
+    File.mkdir_p!(Path.dirname(@sticky_path))
+
+    serialisable =
+      sticky
+      |> Enum.map(fn {{tier, filter}, record} ->
+        {"#{tier}|#{filter || ""}", record}
+      end)
+      |> Map.new()
+
+    case Jason.encode(serialisable) do
+      {:ok, json} -> File.write(@sticky_path, json)
+      {:error, reason} ->
+        Logger.warning("ModelRouter: failed to encode sticky snapshot: #{inspect(reason)}")
+    end
+  rescue
+    e -> Logger.warning("ModelRouter: failed to flush sticky: #{Exception.message(e)}")
+  end
+
+  defp load_sticky_from_disk do
+    with {:ok, body} <- File.read(@sticky_path),
+         {:ok, decoded} when is_map(decoded) <- Jason.decode(body) do
+      Enum.reduce(decoded, %{}, fn {key, raw}, acc ->
+        case String.split(key, "|", parts: 2) do
+          [tier_str, filter_str] ->
+            bucket = {safe_atom(tier_str) || :primary, parse_filter(filter_str)}
+            Map.put(acc, bucket, normalise_sticky(raw))
+
+          _ ->
+            acc
+        end
+      end)
+    else
+      _ -> %{}
+    end
+  end
+
+  defp normalise_sticky(map) when is_map(map) do
+    %{
+      provider_name: Map.get(map, "provider_name") || Map.get(map, :provider_name),
+      model_id: Map.get(map, "model_id") || Map.get(map, :model_id),
+      set_at: Map.get(map, "set_at") || Map.get(map, :set_at) || 0
+    }
+  end
+
+  defp parse_filter(""), do: nil
+  defp parse_filter(str), do: safe_atom(str)
+
+  # ----- health persistence -----
+
+  defp schedule_flush(%{flush_pending?: true} = state), do: state
+
+  defp schedule_flush(state) do
+    Process.send_after(self(), :flush_health, @flush_debounce_ms)
+    %{state | flush_pending?: true}
+  end
+
+  defp flush_health_to_disk do
+    entries =
+      @health_table
+      |> :ets.tab2list()
+      |> Map.new(fn {model_id, health} -> {model_id, health} end)
+
+    File.mkdir_p!(Path.dirname(@health_path))
+
+    case Jason.encode(entries) do
+      {:ok, json} ->
+        File.write(@health_path, json)
+
+      {:error, reason} ->
+        Logger.warning("ModelRouter: failed to encode health snapshot: #{inspect(reason)}")
+    end
+  rescue
+    e -> Logger.warning("ModelRouter: failed to flush health: #{Exception.message(e)}")
+  end
+
+  defp load_health_from_disk do
+    with {:ok, body} <- File.read(@health_path),
+         {:ok, decoded} when is_map(decoded) <- Jason.decode(body) do
+      Enum.each(decoded, fn {model_id, raw} ->
+        :ets.insert(@health_table, {model_id, normalise_health(raw)})
+      end)
+
+      Logger.debug("ModelRouter: loaded health for #{map_size(decoded)} routes from #{@health_path}")
+    else
+      {:error, :enoent} ->
+        :ok
+
+      other ->
+        Logger.warning("ModelRouter: skipping malformed health file: #{inspect(other)}")
+    end
+  end
+
+  defp normalise_health(map) when is_map(map) do
+    Map.merge(default_health(), %{
+      error_count: get_int(map, ["error_count", :error_count], 0),
+      cooldown_until: get_int(map, ["cooldown_until", :cooldown_until]),
+      last_success_at: get_int(map, ["last_success_at", :last_success_at]),
+      last_error_at: get_int(map, ["last_error_at", :last_error_at]),
+      last_error_kind: get_atom(map, ["last_error_kind", :last_error_kind]),
+      consecutive_successes: get_int(map, ["consecutive_successes", :consecutive_successes], 0),
+      verified_at: get_int(map, ["verified_at", :verified_at])
+    })
+  end
+
+  defp get_int(map, keys, default \\ nil) do
+    Enum.find_value(keys, default, fn k ->
+      case Map.get(map, k) do
+        n when is_integer(n) -> n
+        _ -> nil
+      end
+    end)
+  end
+
+  defp get_atom(map, keys) do
+    Enum.find_value(keys, nil, fn k ->
+      case Map.get(map, k) do
+        a when is_atom(a) -> a
+        s when is_binary(s) -> safe_atom(s)
+        _ -> nil
+      end
+    end)
+  end
+
+  defp safe_atom(str) do
+    String.to_existing_atom(str)
+  rescue
+    ArgumentError -> nil
+  end
 
   # ----- context helpers for auto mode -----
 
