@@ -175,8 +175,10 @@ defmodule Agentic.Loop.Stages.ContextGuard do
             )
             {compressed, true}
 
-          {compressed, false} ->
-            # Fallback to deterministic truncation
+          {_compressed, false} ->
+            # LLM compression returned a non-success result; fall back
+            # to deterministic truncation rather than trusting partial
+            # output.
             {deterministic_compact(messages, total, min_keep), false}
         end
       else

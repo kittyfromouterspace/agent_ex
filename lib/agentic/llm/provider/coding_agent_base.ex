@@ -51,12 +51,39 @@ defmodule Agentic.LLM.Provider.CodingAgentBase do
     id = Keyword.fetch!(opts, :id)
     cli_name = Keyword.fetch!(opts, :cli_name)
     label = Keyword.fetch!(opts, :label)
-    model_overrides = Keyword.get(opts, :model_overrides)
+    overrides = Keyword.get(opts, :model_overrides)
+
+    # Compute the default-models AST. If the caller gave overrides we
+    # inline them into a runtime call to `build_models/3`; otherwise
+    # we delegate to `default_seeds/0` at runtime. Both branches go
+    # through the same builder helper so there's exactly one shape
+    # for Dialyzer to analyze. We avoid `Macro.escape` because Elixir
+    # AST cannot represent >2-tuples as literals — escaping a list of
+    # 4-tuples produces `{:{}, meta, [...]}` AST nodes that fail to
+    # match the function head at runtime.
+    default_models_body =
+      if overrides do
+        quote do
+          Agentic.LLM.Provider.CodingAgentBase.build_models(
+            unquote(id),
+            unquote(label),
+            unquote(overrides)
+          )
+        end
+      else
+        quote do
+          Agentic.LLM.Provider.CodingAgentBase.build_models(
+            unquote(id),
+            unquote(label),
+            Agentic.LLM.Provider.CodingAgentBase.default_seeds()
+          )
+        end
+      end
 
     quote do
       @behaviour Agentic.LLM.Provider
 
-      alias Agentic.LLM.{Credentials, Model}
+      alias Agentic.LLM.Credentials
 
       @cli_name unquote(cli_name)
 
@@ -83,25 +110,7 @@ defmodule Agentic.LLM.Provider.CodingAgentBase do
 
       @impl true
       def default_models do
-        provider_id = unquote(id)
-
-        seeds = unquote(model_overrides) || Agentic.LLM.Provider.CodingAgentBase.default_seeds()
-
-        agent_label = unquote(label)
-
-        Enum.map(seeds, fn {model_id, model_label, tier, ctx} ->
-          %Model{
-            id: model_id,
-            provider: provider_id,
-            label: "#{model_label} (via #{agent_label})",
-            context_window: ctx,
-            max_output_tokens: 8_192,
-            cost: %{input: 0.0, output: 0.0},
-            capabilities: MapSet.new([:chat, :tools]),
-            tier_hint: tier,
-            source: :static
-          }
-        end)
+        unquote(default_models_body)
       end
 
       @impl true
@@ -119,5 +128,29 @@ defmodule Agentic.LLM.Provider.CodingAgentBase do
         if System.find_executable(@cli_name), do: :ready, else: :unavailable
       end
     end
+  end
+
+  @doc """
+  Builds a `[Model.t()]` from a seed list. Called by the generated
+  `default_models/0` in each per-agent wrapper. Public so the macro
+  can emit a call to it without escaping the seed list (which would
+  mangle 4-tuples through the AST representation).
+  """
+  @spec build_models(atom(), String.t(), [{String.t(), String.t(), atom(), integer()}]) ::
+          [Agentic.LLM.Model.t()]
+  def build_models(provider_id, agent_label, seeds) do
+    Enum.map(seeds, fn {model_id, model_label, tier, ctx} ->
+      %Agentic.LLM.Model{
+        id: model_id,
+        provider: provider_id,
+        label: "#{model_label} (via #{agent_label})",
+        context_window: ctx,
+        max_output_tokens: 8_192,
+        cost: %{input: 0.0, output: 0.0},
+        capabilities: MapSet.new([:chat, :tools]),
+        tier_hint: tier,
+        source: :static
+      }
+    end)
   end
 end

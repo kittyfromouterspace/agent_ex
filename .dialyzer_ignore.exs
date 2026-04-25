@@ -1,10 +1,13 @@
 [
   ~r"lib/mix/tasks/agentic.test_setup_recollect.ex.*callback_info_missing",
+  ~r"lib/mix/tasks/agentic.routes.ex.*callback_info_missing",
+  ~r"lib/mix/tasks/agentic.routes.ex.*unknown_function",
   ~r"lib/agentic/skill/analyzer.ex.*pattern_match",
   ~r"lib/agentic/skill/analyzer.ex.*unused_fun",
   ~r"lib/agentic/skill/core_skills.ex.*pattern_match",
   ~r"lib/agentic/skill/service.ex.*pattern_match",
   ~r"lib/agentic/skill/service.ex.*unused_fun",
   ~r"lib/agentic/tools/skill.ex.*pattern_match",
-  ~r"lib/agentic/protocol/acp/session.ex.*pattern_match"
+  ~r"lib/agentic/protocol/acp/session.ex.*pattern_match",
+  ~r"lib/agentic/loop/stages/workspace_snapshot.ex.*pattern_match"
 ]

@@ -288,8 +288,8 @@ defmodule Agentic.Loop.Stages.LLMCall do
   # but brief cooldowns — a short backoff often succeeds.
   @max_rate_limit_retries 3
 
-  defp do_try_routes([route | rest], tier, base_params, llm_chat, ctx, _last) do
-    do_try_routes_with_retry([route | rest], tier, base_params, llm_chat, ctx, _last, 0)
+  defp do_try_routes([route | rest], tier, base_params, llm_chat, ctx, last_error) do
+    do_try_routes_with_retry([route | rest], tier, base_params, llm_chat, ctx, last_error, 0)
   end
 
   defp do_try_routes_with_retry([], tier, base_params, llm_chat, ctx, last_error, _attempt) do
