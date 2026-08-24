@@ -190,35 +190,85 @@ defmodule Agentic.LLM.Transport.OpenAIChatCompletions do
   # ----- request transforms -----
 
   defp transform_messages(messages) when is_list(messages) do
-    Enum.map(messages, &transform_message/1)
+    Enum.flat_map(messages, &transform_message/1)
   end
 
   defp transform_messages(_), do: []
 
-  defp transform_message(%{"role" => role, "content" => content}) when is_binary(content) do
-    %{"role" => role, "content" => content}
+  # Canonical assistant turn with content BLOCKS (Anthropic shape): text
+  # becomes the content, tool_use blocks become a proper `tool_calls`
+  # array. The old flatten rendered tool_use as the literal text
+  # "[tool_use name]" — the model saw its own history rewritten as text
+  # markers and learned to emit them (the 2026-08-20/24 marker-spam that
+  # killed every OpenRouter-failover run).
+  defp transform_message(%{"role" => "assistant", "content" => content})
+       when is_list(content) do
+    text =
+      content
+      |> Enum.filter(&(&1["type"] == "text"))
+      |> Enum.map_join("\n", & &1["text"])
+
+    tool_calls =
+      content
+      |> Enum.filter(&(&1["type"] == "tool_use"))
+      |> Enum.map(fn tu ->
+        %{
+          "id" => tu["id"],
+          "type" => "function",
+          "function" => %{
+            "name" => tu["name"],
+            "arguments" => Jason.encode!(tu["input"] || %{})
+          }
+        }
+      end)
+
+    msg = %{"role" => "assistant", "content" => if(text == "", do: nil, else: text)}
+    [if(tool_calls == [], do: msg, else: Map.put(msg, "tool_calls", tool_calls))]
   end
 
+  # A user turn carrying tool_result blocks → one `role: "tool"` message
+  # per result (OpenAI shape), with any remaining text as a plain message.
   defp transform_message(%{"role" => role, "content" => content}) when is_list(content) do
-    %{"role" => role, "content" => flatten_content_blocks(content)}
+    {results, texts} = Enum.split_with(content, &(&1["type"] == "tool_result"))
+
+    tool_msgs =
+      Enum.map(results, fn tr ->
+        %{
+          "role" => "tool",
+          "tool_call_id" => tr["tool_use_id"],
+          "content" => result_text(tr["content"])
+        }
+      end)
+
+    text =
+      texts
+      |> Enum.map(&if(&1["type"] == "text", do: &1["text"], else: ""))
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join("\n")
+
+    if(text == "", do: [], else: [%{"role" => role, "content" => text}]) ++ tool_msgs
+  end
+
+  defp transform_message(%{"role" => role, "content" => content}) when is_binary(content) do
+    [%{"role" => role, "content" => content}]
   end
 
   defp transform_message(%{role: role, content: content}) do
     transform_message(%{"role" => role, "content" => content})
   end
 
-  defp transform_message(other), do: other
+  defp transform_message(other), do: [other]
 
-  defp flatten_content_blocks(content) do
-    content
-    |> Enum.map(fn
+  defp result_text(content) when is_binary(content), do: content
+
+  defp result_text(content) when is_list(content) do
+    Enum.map_join(content, "\n", fn
       %{"type" => "text", "text" => t} -> t
-      %{"type" => "tool_result", "content" => c} when is_binary(c) -> c
-      %{"type" => "tool_use"} = tu -> "[tool_use #{tu["name"]}]"
-      _ -> ""
+      other -> inspect(other)
     end)
-    |> Enum.join("\n")
   end
+
+  defp result_text(other), do: inspect(other)
 
   defp transform_tools(tools) when is_list(tools) do
     Enum.map(tools, fn tool ->
