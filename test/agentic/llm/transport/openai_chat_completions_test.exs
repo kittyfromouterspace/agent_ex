@@ -23,7 +23,12 @@ defmodule Agentic.LLM.Transport.OpenAIChatCompletionsTest do
           "role" => "assistant",
           "content" => [
             %{"type" => "text", "text" => "let me check"},
-            %{"type" => "tool_use", "id" => "c1", "name" => "fs_read", "input" => %{"path" => "a.ex"}}
+            %{
+              "type" => "tool_use",
+              "id" => "c1",
+              "name" => "fs_read",
+              "input" => %{"path" => "a.ex"}
+            }
           ]
         }
       ])
@@ -83,7 +88,14 @@ defmodule Agentic.LLM.Transport.OpenAIChatCompletionsTest do
         %{"role" => "user", "content" => "read a.ex"},
         %{
           "role" => "assistant",
-          "content" => [%{"type" => "tool_use", "id" => "c1", "name" => "fs_read", "input" => %{"path" => "a.ex"}}]
+          "content" => [
+            %{
+              "type" => "tool_use",
+              "id" => "c1",
+              "name" => "fs_read",
+              "input" => %{"path" => "a.ex"}
+            }
+          ]
         },
         %{
           "role" => "user",

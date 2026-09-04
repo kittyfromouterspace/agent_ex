@@ -119,6 +119,28 @@ defmodule Agentic.LLM.Provider.Zai do
         source: :static
       },
       %Model{
+        id: "glm-5.3-flash",
+        provider: :zai,
+        label: "GLM-5.3 Flash",
+        context_window: 200_000,
+        max_output_tokens: 131_072,
+        cost: %{input: 0.0, output: 0.0},
+        capabilities: MapSet.new([:chat, :tools, :reasoning]),
+        tier_hint: :primary,
+        source: :static
+      },
+      %Model{
+        id: "glm-5.3",
+        provider: :zai,
+        label: "GLM-5.3",
+        context_window: 200_000,
+        max_output_tokens: 131_072,
+        cost: %{input: 0.0, output: 0.0},
+        capabilities: MapSet.new([:chat, :tools, :reasoning]),
+        tier_hint: :primary,
+        source: :static
+      },
+      %Model{
         id: "glm-5.2",
         provider: :zai,
         label: "GLM-5.2",

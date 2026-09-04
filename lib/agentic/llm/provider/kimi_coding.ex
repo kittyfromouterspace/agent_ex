@@ -25,8 +25,9 @@ defmodule Agentic.LLM.Provider.KimiCoding do
   ## Models
 
   All models are reachable on the coding plan (flat subscription), so
-  per-token costs are zero here. `kimi-for-coding` is the canonical
-  alias; `k2p7` is the dated alias for Kimi K2.7 Code.
+  per-token costs are zero here. `k3-256k` is the Kimi K3 256k coding model
+  (the coding seat since 2026-09-04); `kimi-for-coding` is the plan alias;
+  `k2p7` is the dated alias for Kimi K2.7 Code.
 
   ## Quirks
 
@@ -70,6 +71,17 @@ defmodule Agentic.LLM.Provider.KimiCoding do
   @impl true
   def default_models do
     [
+      %Model{
+        id: "k3-256k",
+        provider: :kimi_coding,
+        label: "Kimi K3 256K",
+        context_window: 262_144,
+        max_output_tokens: 32_768,
+        cost: %{input: 0.0, output: 0.0, cache_read: 0.0, cache_write: 0.0},
+        capabilities: MapSet.new([:chat, :tools, :vision, :reasoning]),
+        tier_hint: :primary,
+        source: :static
+      },
       %Model{
         id: "kimi-for-coding",
         provider: :kimi_coding,

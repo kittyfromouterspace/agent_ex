@@ -30,6 +30,8 @@ defmodule Agentic.LLM.CanonicalTest do
 
     test "z.ai GLM-5 family (coding plan) is seeded" do
       assert Canonical.for_model(:zai, "glm-5.2") == "glm-5.2"
+      assert Canonical.for_model(:zai, "glm-5.3") == "glm-5.3"
+      assert Canonical.for_model(:zai, "glm-5.3-flash") == "glm-5.3-flash"
       assert Canonical.for_model(:zai, "glm-5v-turbo") == "glm-5v-turbo"
     end
 
@@ -38,13 +40,22 @@ defmodule Agentic.LLM.CanonicalTest do
       assert Canonical.for_model(:moonshot, "kimi-k2.6") == "kimi-k2.6"
     end
 
+    test "Moonshot K3 ids collapse onto the K3 code canonical" do
+      assert Canonical.for_model(:moonshot, "kimi-k3-code") == "kimi-k3-code"
+      assert Canonical.for_model(:moonshot, "kimi-k3") == "kimi-k3-code"
+    end
+
     test "Moonshot highspeed variant collapses onto the code canonical" do
       assert Canonical.for_model(:moonshot, "kimi-k2.7-code-highspeed") ==
                "kimi-k2.7-code"
     end
 
-    test "Kimi For Coding aliases collapse onto the K2.7 code canonical" do
-      assert Canonical.for_model(:kimi_coding, "kimi-for-coding") == "kimi-k2.7-code"
+    test "Kimi For Coding K3 ids collapse onto the K3 code canonical" do
+      assert Canonical.for_model(:kimi_coding, "k3-256k") == "kimi-k3-code"
+      assert Canonical.for_model(:kimi_coding, "kimi-for-coding") == "kimi-k3-code"
+    end
+
+    test "Kimi For Coding K2-era aliases stay on the K2.7 canonical" do
       assert Canonical.for_model(:kimi_coding, "k2p7") == "kimi-k2.7-code"
     end
 

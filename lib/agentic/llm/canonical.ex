@@ -63,6 +63,8 @@ defmodule Agentic.LLM.Canonical do
     {:zai, "glm-5.1"} => "glm-5.1",
     {:zai, "glm-5-turbo"} => "glm-5-turbo",
     {:zai, "glm-5.2"} => "glm-5.2",
+    {:zai, "glm-5.3"} => "glm-5.3",
+    {:zai, "glm-5.3-flash"} => "glm-5.3-flash",
     {:zai, "glm-5v-turbo"} => "glm-5v-turbo",
 
     # Gemini CLI — Google models served via the gemini binary.
@@ -73,17 +75,21 @@ defmodule Agentic.LLM.Canonical do
     {:kimi, "moonshot/k2"} => "moonshot-k2",
     {:kimi, "moonshot/k2-thinking"} => "moonshot-k2-thinking",
 
-    # Moonshot direct API (OpenAI-compatible) — same K2 weights.
+    # Moonshot direct API (OpenAI-compatible) — K2 family + K3.
     {:moonshot, "kimi-k2.7-code"} => "kimi-k2.7-code",
     {:moonshot, "kimi-k2.7-code-highspeed"} => "kimi-k2.7-code",
     {:moonshot, "kimi-k2.6"} => "kimi-k2.6",
     {:moonshot, "kimi-k2.5"} => "kimi-k2.5",
     {:moonshot, "kimi-k2-thinking"} => "kimi-k2-thinking",
+    {:moonshot, "kimi-k3-code"} => "kimi-k3-code",
+    {:moonshot, "kimi-k3"} => "kimi-k3-code",
 
     # Kimi For Coding (Anthropic-compatible coding plan) — same weights,
     # reached via the coding gateway. Aliases collapse onto the coding
     # canonical so the router can pick the cheapest configured pathway.
-    {:kimi_coding, "kimi-for-coding"} => "kimi-k2.7-code",
+    # The plan serves K3 since 2026-08 (k3-256k is the K3 256k seat).
+    {:kimi_coding, "k3-256k"} => "kimi-k3-code",
+    {:kimi_coding, "kimi-for-coding"} => "kimi-k3-code",
     {:kimi_coding, "k2p7"} => "kimi-k2.7-code",
     {:kimi_coding, "kimi-k2-thinking"} => "kimi-k2-thinking",
 
