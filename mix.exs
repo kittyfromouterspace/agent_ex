@@ -39,6 +39,13 @@ defmodule Agentic.MixProject do
       {:req, "~> 0.5"},
       {:nimble_options, "~> 1.1"},
       {:recollect, "~> 0.5"},
+      # decimal 3 forced past ex_money 5.x, which caps it at `~> 1.6 or ~> 2.0`.
+      # Closes EEF-CVE-2026-32686 (unbounded exponent -> unauthenticated DoS) and
+      # unblocks ecto 3.14, which requires decimal ~> 3.0. The alternative was
+      # ex_money 6, which drops ex_cldr for `localize` and breaks Agentic.Cldr —
+      # a localization migration, not a security fix. Operator-approved
+      # 2026-09-07: the decimal 2 -> 3 delta is small (B-1413).
+      {:decimal, "~> 3.1", override: true},
       {:ex_money, "~> 5.24"},
       {:exqlite, "~> 0.27"},
       {:ecto_sql, "~> 3.12", optional: true},
